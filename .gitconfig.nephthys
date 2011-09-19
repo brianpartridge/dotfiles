@@ -12,6 +12,7 @@
 	st = status
 	c = commit
 	co = checkout
+	cp = cherry-pick
 	d = diff
 	ds = diff --stat
 	dt = difftool
