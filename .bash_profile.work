@@ -1,5 +1,5 @@
 # Setup development related variables
-export PATH=~/bin:/build/trees/bin:~/third_party/vmware-git-tools/bin:$PATH
+export PATH=~/bin:$PATH
 export P4CONFIG=.p4config
 export TCROOT=/build/toolchain
 
