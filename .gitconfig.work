@@ -1,0 +1,34 @@
+[color]
+	ui = auto
+[user]
+	name = Brian Partridge
+	email = partridgeb@vmware.com
+[alias]
+	merge = merge --no-ff
+	s = status
+	st = status
+	c = commit
+	co = checkout
+	d = diff
+	ds = diff --stat
+	dt = difftool
+	b = branch
+	l = log
+	ls = log --stat
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset' --abbrev-commit --date=relative
+[advice]
+	statusHints = false
+[core]
+	whitespace = trailing-space,space-before-tab
+[branch]
+	autosetupmerge = true
+[merge]
+	stat = true
+[diff]
+	tool = Kaleidoscope
+[difftool]
+	prompt = false
+[difftool "Kaleidoscope"]
+	cmd = ksdiff-wrapper git \"$LOCAL\" \"$REMOTE\"
+[reviewboard]
+	url = https://reviewboard.eng.vmware.com
