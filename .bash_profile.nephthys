@@ -1,0 +1,36 @@
+#############
+# Variables #
+#############
+# HTPC IP
+export ANUBIS=192.168.1.153
+
+#########
+# PATHs #
+#########
+# Homebew
+export PATH=/usr/local/bin:$PATH
+
+# Python Framework Install
+export PATH="/Library/Frameworks/Python.framework/Versions/Current/bin:$PATH"
+
+# User executables/scripts
+export PATH=~/bin:$PATH
+
+###########
+# Aliases #
+###########
+
+# Connect to HTPC
+alias a="ssh $USER@$ANUBIS"
+
+# Backup music
+#alias bkup_music="rsync -avzu /Users/brian/Music/iTunes brian@$ANUBIS:/Volumes/Storage2/music-synched"
+
+# Set environment to use Python 2.7
+alias usepython27="sudo rm /Library/Frameworks/Python.framework/Versions/Current && sudo ln -s /Library/Frameworks/Python.framework/Versions/2.7 /Library/Frameworks/Python.framework/Versions/Current"
+
+# Set environment to use Python 3.1
+alias usepython31="sudo rm /Library/Frameworks/Python.framework/Versions/Current && sudo ln -s /Library/Frameworks/Python.framework/Versions/3.1 /Library/Frameworks/Python.framework/Versions/Current"
+
+# Set hub as analternative to git
+alias git=hub
