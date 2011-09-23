@@ -10,6 +10,8 @@ Copyright (c) 2011 MultipleEntendre.com. All rights reserved.
 import sys
 import os
 import logging
+import shutil
+import re
 
 # Configuration
 TV_DIRECTORY = "/Volumes/Storage2/tv-freeform"
@@ -23,8 +25,7 @@ class Torrent(object):
 	name = ""
 	hash = ""
 	directory = ""
-	
-	mediaFilePath = ""
+	mediaFilePath = None
 	
 	def __init__(self):
 		pass
@@ -33,26 +34,55 @@ class Torrent(object):
 		return os.path.join(self.directory, self.name)
 	
 	def isTVShow(self):
-		# TODO: regex the name check the directory to best guess the media type
-		# set mediaFilePath
+                result = re.match(r'(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]', self.name)
+                if result:
+                        s_num = int(result.groups()[1])
+                        e_num = int(result.groups()[2])
+			return True
+
 		return False
 		
 	def isMovie(self):
 		# TODO: regex the name check the directory to best guess the media type
-		# set mediaFilePath
 		return False
+
+	def resolveMediaFilePath(self):
+		if self.mediaFilePath:
+			return
+		result = None
+		target = self.path()
+		mediaExtensions = [".mkv", ".avi", ".mov"]
+		if os.path.isdir(target):
+			# Search the directory for media files
+			entries = os.listdir(target)
+			potentialMediaFiles = []
+			for e in entries:
+				base, ext = os.path.splitext(e)
+				if ext in mediaExtensions:
+					potentialMediaFiles.append(e) 
+			if len(potentialMediaFiles) == 1:
+				result = os.path.join(target, potentialMediaFiles[0])
+		else:
+			base, ext = os.path.splitext(target)
+			if ext in mediaExtensions:
+				result = target
+		self.mediaFilePath = result
+		pass
 		
 	def createMediaLibraryCopy(self):
+		dest = None
 		if self.isTVShow():
-			# copy mediaFilePath to TV_DIRECTORY
-			logging.info("Copied to TV library.")
-			pass
+			dest = TV_DIRECTORY
 		elif self.isMovie():
-			# copy mediaFilePath to MOVIE_DIRECTORY
-			logging.info("Copied to movie library.")
-			pass
+			dest = MOVIE_DIRECTORY
+
+		if dest:
+			logging.info("Copying %s to %s" % (self.mediaFilePath, dest))
+			shutil.copy(self.mediaFilePath, dest)
+			logging.info("Copy complete")
 		else:
-			logging.info("Not valid for media library.")
+			logging.info("Not adding %s to media library", self.name)
+		pass
 	
 class TransmissionTorrent(Torrent):
 	appVersion = None
@@ -73,6 +103,8 @@ class TransmissionTorrent(Torrent):
 			self.id = env['TR_TORRENT_ID']
 		if 'TR_TORRENT_NAME' in env:
 			self.name = env['TR_TORRENT_NAME']
+
+		self.resolveMediaFilePath()
 			
 		logging.info("name: %s" % self.name)
 		logging.info("hash: %s" % self.hash)
@@ -83,6 +115,8 @@ class TransmissionTorrent(Torrent):
 		logging.info("tv: %s" % self.isTVShow())
 		logging.info("movie: %s" % self.isMovie())
 		logging.info("path: %s" % self.path())
+		logging.info("media: %s" % self.mediaFilePath)
+
 		pass
 	
 	
