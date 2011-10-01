@@ -34,5 +34,3 @@
 	prompt = false
 [difftool "Kaleidoscope"]
 	cmd = ksdiff-wrapper git \"$LOCAL\" \"$REMOTE\"
-[reviewboard]
-	url = https://reviewboard.eng.vmware.com
