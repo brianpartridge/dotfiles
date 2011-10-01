@@ -23,7 +23,12 @@ if [ "$HOSTNAME" = "nephthys" ]
 then
 	source ~/dotfiles/.bash_profile.nephthys
 else
-	source ~/dotfiles/.bash_profile.work
+    if [ "$HOSTNAME" = "anubis.local" ]
+    then
+        source ~/dotfiles/.bash_profile.anubis
+    else
+	    source ~/dotfiles/.bash_profile.work
+    fi
 fi
 
 # Show git branch in prompt

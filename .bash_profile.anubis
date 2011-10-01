@@ -1,0 +1,20 @@
+# PATH
+export PATH=~/bin:$PATH
+
+# Important Folders
+export s1=/Volumes/Storage1
+export s2=/Volumes/Storage2
+export dow=$s1/downloads
+export mov=$s2/movies-misc
+export movc=$s2/movies-classics
+export tv=$s2/tv-freeform
+export tvo=$s2/tv-organized
+
+# Alias to quickly navigate folders
+alias s1='cd $s1'
+alias s2='cd $s2'
+alias dow='cd $dow'
+alias mov='cd $mov'
+alias movc='cd $movc'
+alias tv='cd $tv'
+alias tvo='cd $tvo'
