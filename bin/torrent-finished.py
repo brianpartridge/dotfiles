@@ -34,7 +34,13 @@ class Torrent(object):
 		return os.path.join(self.directory, self.name)
 	
 	def isTVShow(self):
-                result = re.match(r'(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]', self.name)
+                # Old format: title delimiter s? number? delimiter? e? number delimiter
+                # The problem with this regex is that it sometimes says movies are tv shows.
+                # result = re.match(r'(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]', self.name)
+                
+                # New format: title delimiter s number e number delimter
+                # Its less powerful, but correct more often.
+                result = re.match(r'(.+)[\._ \-][Ss](\d+)[EeXx](\d{2})[\._ \-]', self.name)
                 if result:
                         s_num = int(result.groups()[1])
                         e_num = int(result.groups()[2])
@@ -76,7 +82,7 @@ class Torrent(object):
 		elif self.isMovie():
 			dest = MOVIE_DIRECTORY
 
-		if dest:
+		if self.mediaFilePath and dest:
 			logging.info("Copying %s to %s" % (self.mediaFilePath, dest))
 			try:
 				shutil.copy(self.mediaFilePath, dest)
