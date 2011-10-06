@@ -2,7 +2,7 @@
 
 """
 rtrss.py
-Version 0.3
+Version 0.4
 
 Copyright (c) 2011 Brian Partridge
 
@@ -36,9 +36,15 @@ import os
 import sys
 import ConfigParser
 import time
+import logging
 
-config_file = "/Users/brian/.rtrss.conf"
-torrent_directory = "/Users/brian/rsstorrents"
+# Configuration
+CONFIGFILE = "~/dotfiles/.rtrss.conf"
+TORRENT_DIRECTORY = "~/rsstorrents"
+LOGFILE = "~/logs/rtrss.log"
+LOGLEVEL = logging.DEBUG
+
+# DO NOT MODIFY BELOW THIS LINE #
 
 parsed_feeds = {}
 
@@ -56,21 +62,17 @@ class Episode():
 	def Get(self):
 		msg = "Getting: %s S%dE%d" % (self.name, self.season, self.episode)
 		print msg
-		log(msg)
+		logging.info(msg)
 
-		filename = os.path.join(torrent_directory, "%s S%dE%d rtRSS.torrent" % (self.name, self.season, self.episode))
+		filename = os.path.join(os.path.expanduser(TORRENT_DIRECTORY), "%s S%dE%d rtRSS.torrent" % (self.name, self.season, self.episode))
 		try:
 			urllib.urlretrieve(self.url, filename)
 			# Set metadata that could be useful later
 			meta = {1:'type=tv', 2:'name=%s' % self.name, 3:'season=%s' % str(self.season), 4:'episode=%s' % str(self.episode)}
 			if self.name == "ufc.main.events":
 				meta = {}
-			for m in meta:
-				print m
 		except IOError, e:
-			print e
-		else:
-			print "started %s" % (filename)
+			logging.exception("Error retrieving torrent from: %s at: %s" % (self.url, filename))
 			
 	def __lt__(self, rhs):
 		if self.season < rhs.season:
@@ -94,17 +96,17 @@ class TvFeed():
 		self.last_episode = args['episode']
 		
 	def ListEpisodes(self):
-		print "Processing", self.label
+		logging.info("Processing %s" % self.label)
 		
 		previously_cached = True
 		# cache the parsed feed
 		if not parsed_feeds.has_key(self.url):
 			previously_cached = False
-			print "parsing: ", self.url
-			parsed_feeds[self.url] = feedparser.parse(self.url)
+			logging.debug("Parsing: %s" % self.url)
+			temp = feedparser.parse(self.url)
+			parsed_feeds[self.url] = temp
+			logging.debug("%d entries" % (len(temp.entries)))
 		feed = parsed_feeds[self.url]
-		if feed.entries:
-			print "%d entries" % (len(feed.entries))
 		
 		eps = []
 		for e in feed.entries:
@@ -113,7 +115,7 @@ class TvFeed():
 
 			# print the feed entries if this is the first time with the feed
 			if not previously_cached:
-				 print "  " + e.title.encode("utf-8")
+				 logging.debug("  %s" % e.title.encode("utf-8"))
 
 			# check for keywords
 			found = True
@@ -124,46 +126,28 @@ class TvFeed():
 			if not found:
 				# if any keywords weren't found, move on to the next entry
 				continue
-			print e.title
+			logging.debug("Found: %s" % e.title.encode("utf-8"))
 
 			# Remove H.264 as it breaks my regular expression
 			if "H.264" in e.title:
 				e.title = e.title.replace("H.264", "")
-				print e.title
 			elif "h.264" in e.title:
 				e.title = e.title.replace("h.264", "")
-				print e.title
 					
-			if "tvrss.net" in self.url:
-				# parse entry body
-				metadata = {}
-				tmp1 = e.summary.split(';')
-				for tmp2 in tmp1:
-					try:
-						k,v = tmp2.split(':')
-					except ValueError, err:
-						print 'value error ',err
-						continue
-					metadata[k.strip()] = v.strip()
-				try:
-					#ep = Episode(e.link, metadata['Show Name'].strip(), int(metadata['Season']), int(metadata['Episode']))
-					ep = Episode(e.link, self.name.strip(), int(metadata['Season']), int(metadata['Episode']))
-				except KeyError, err:
-					# some data wasnt provided
-					print 'KeyError: ',err
-					continue
-			elif "UFC" in self.keywords:
+			if "UFC" in self.keywords:
 				# specific for UFC episodes which don't have a season
 				# get info from entry title
 				result = re.match(r'UFC (\d+)', e.title)
 				if result:
-					if "countdown" in e.title.lower():
-						print("Skipping the countdown episode");
-						continue
+					invalidKeywords = ("countdown", "preliminary", "primetime")
+					for invalidKeyword in invalidKeywords:
+						if invalidKeyword in e.title.lower():
+							logging.info("Skipping the %s episode" % invalidKeyword);
+							continue
 					ep = Episode(e.link, self.name, 0, int(result.groups()[0]))
 				else:
 					# error nothing to compare against
-					print("No data found.")
+					logging.info("No PPV number found.")
 					continue
 			elif "Part" in self.keywords:
 				# specific for series that use 'Parts' rather then episodes and don't have a season
@@ -173,7 +157,7 @@ class TvFeed():
 					ep = Episode(e.link, self.name, 0, int(result.groups()[0]))
 				else:
 					# error nothing to compare against
-					print("No data found.")
+					logging.info("No part number found.")
 					continue
 			else:
 				# get info from entry title
@@ -192,7 +176,7 @@ class TvFeed():
 					ep = Episode(e.link, self.name, s_num, e_num)
 				else:
 					# error nothing to compare against
-					print("No data found.")
+					logging.info("No season/episode number found.")
 					continue
 			eps.append(ep)
 			
@@ -200,16 +184,12 @@ class TvFeed():
 		
 		return eps
 
-def log(msg):
-	fp = open('/Users/brian/logs/rtrss.log', 'a')
-	fp.write(str(msg) + "\n")
-	fp.close()
-
-def main(argv=None):			
+def main(argv=None):
+	logging.basicConfig(filename = os.path.expanduser(LOGFILE), level = LOGLEVEL, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+	logging.info("== STARTING ==")
+	
 	cp = ConfigParser.ConfigParser()
-	cp.read(config_file)
-
-	log(time.strftime('%b %d %Y %H:%M:%S', time.localtime()))
+	cp.read(os.path.expanduser(CONFIGFILE))
 	
 	for show in cp.sections():
 		# initialize mandatory inputs
@@ -267,7 +247,7 @@ def main(argv=None):
 		#next
 
 	# save updates to the config file
-	fp = open(config_file, 'w')
+	fp = open(os.path.expanduser(CONFIGFILE), 'w')
 	cp.write(fp)
 	fp.close()
 	
