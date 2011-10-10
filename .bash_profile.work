@@ -7,5 +7,5 @@ export TCROOT=/build/toolchain
 alias pr='pr.py'
 
 # Sandbox build projects in current branch using current HEAD
-alias sandbox-vcipad='/build/apps/bin/gobuild sandbox queue --bootstrap="vcipad-git=scm-git:vcipad.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcipad-git'
-alias sandbox-vcd-mobile='/build/apps/bin/gobuild sandbox queue --bootstrap="vcd-mobile=scm-git:vcd-mobile.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcd-mobile'
+alias sandbox-vcipad='/build/apps/bin/gobuild sandbox queue --bootstrap="vcipad-git=scm-git:vcipad.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcipad-git | sandbox-opener.py'
+alias sandbox-vcd-mobile='/build/apps/bin/gobuild sandbox queue --bootstrap="vcd-mobile=scm-git:vcd-mobile.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcd-mobile | sandbox-opener.py'
