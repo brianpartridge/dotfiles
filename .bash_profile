@@ -72,6 +72,8 @@ alias ls-la='ls -laG'
 alias cd..='cd ..'
 alias grep='grep --color'
 alias env='env | sort'
+alias gitxa="gitx --all"
+alias gitxc="gitx -c"
 
 # Enable git bash completion
 source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
