@@ -14,8 +14,9 @@ import shutil
 import re
 
 # Configuration
-TV_DIRECTORY = "/Volumes/Storage2/tv-freeform"
-MOVIE_DIRECTORY = "/Volumes/Storage2/movies-misc"
+MEDIA_ROOT = "/Volumes/DroboFS/tdb113070198/1/Public/media"
+TV_DIRECTORY = os.path.join(MEDIA_ROOT, "tv-freeform")
+MOVIE_DIRECTORY = os.path.join(MEDIA_ROOT, "movies-misc")
 LOGFILE = "~/logs/torrent-finished.log"
 LOGLEVEL = logging.DEBUG
 
