@@ -37,6 +37,7 @@ import sys
 import ConfigParser
 import time
 import logging
+import logging.handlers
 
 # Configuration
 CONFIGFILE = "~/dotfiles/.rtrss.conf"
@@ -45,6 +46,8 @@ LOGFILE = "~/logs/rtrss.log"
 LOGLEVEL = logging.DEBUG
 
 # DO NOT MODIFY BELOW THIS LINE #
+
+logger = logging.getLogger("rtrss logger")
 
 parsed_feeds = {}
 
@@ -62,7 +65,7 @@ class Episode():
 	def Get(self):
 		msg = "Getting: %s S%dE%d" % (self.name, self.season, self.episode)
 		print msg
-		logging.info(msg)
+		logger.info(msg)
 
 		filename = os.path.join(os.path.expanduser(TORRENT_DIRECTORY), "%s S%dE%d rtRSS.torrent" % (self.name, self.season, self.episode))
 		try:
@@ -72,7 +75,7 @@ class Episode():
 			if self.name == "ufc.main.events":
 				meta = {}
 		except IOError, e:
-			logging.exception("Error retrieving torrent from: %s at: %s" % (self.url, filename))
+			logger.exception("Error retrieving torrent from: %s at: %s" % (self.url, filename))
 			
 	def __lt__(self, rhs):
 		if self.season < rhs.season:
@@ -96,16 +99,16 @@ class TvFeed():
 		self.last_episode = args['episode']
 		
 	def ListEpisodes(self):
-		logging.info("Processing %s" % self.label)
+		logger.debug("Processing %s" % self.label)
 		
 		previously_cached = True
 		# cache the parsed feed
 		if not parsed_feeds.has_key(self.url):
 			previously_cached = False
-			logging.debug("Parsing: %s" % self.url)
+			logger.debug("Parsing: %s" % self.url)
 			temp = feedparser.parse(self.url)
 			parsed_feeds[self.url] = temp
-			logging.debug("%d entries" % (len(temp.entries)))
+			logger.debug("%d entries" % (len(temp.entries)))
 		feed = parsed_feeds[self.url]
 		
 		eps = []
@@ -115,7 +118,7 @@ class TvFeed():
 
 			# print the feed entries if this is the first time with the feed
 			if not previously_cached:
-				 logging.debug("  %s" % e.title.encode("utf-8"))
+				 logger.debug("  %s" % e.title.encode("utf-8"))
 
 			# check for keywords
 			found = True
@@ -126,7 +129,7 @@ class TvFeed():
 			if not found:
 				# if any keywords weren't found, move on to the next entry
 				continue
-			logging.debug("Found: %s" % e.title.encode("utf-8"))
+			logger.info("Found: %s" % e.title.encode("utf-8"))
 
 			# Remove H.264 as it breaks my regular expression
 			if "H.264" in e.title:
@@ -142,12 +145,12 @@ class TvFeed():
 					invalidKeywords = ("countdown", "preliminary", "primetime")
 					for invalidKeyword in invalidKeywords:
 						if invalidKeyword in e.title.lower():
-							logging.info("Skipping the %s episode" % invalidKeyword);
+							logger.debug("Skipping the %s episode" % invalidKeyword);
 							continue
 					ep = Episode(e.link, self.name, 0, int(result.groups()[0]))
 				else:
 					# error nothing to compare against
-					logging.info("No PPV number found.")
+					logger.debug("No PPV number found.")
 					continue
 			elif "Part" in self.keywords:
 				# specific for series that use 'Parts' rather then episodes and don't have a season
@@ -157,7 +160,7 @@ class TvFeed():
 					ep = Episode(e.link, self.name, 0, int(result.groups()[0]))
 				else:
 					# error nothing to compare against
-					logging.info("No part number found.")
+					logger.debug("No part number found.")
 					continue
 			else:
 				# get info from entry title
@@ -176,7 +179,7 @@ class TvFeed():
 					ep = Episode(e.link, self.name, s_num, e_num)
 				else:
 					# error nothing to compare against
-					logging.info("No season/episode number found.")
+					logger.debug("No season/episode number found.")
 					continue
 			eps.append(ep)
 			
@@ -185,8 +188,21 @@ class TvFeed():
 		return eps
 
 def main(argv=None):
-	logging.basicConfig(filename = os.path.expanduser(LOGFILE), level = LOGLEVEL, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
-	logging.info("== STARTING ==")
+	logger.setLevel(LOGLEVEL)
+	
+	filehandler = logging.handlers.RotatingFileHandler(os.path.expanduser(LOGFILE), maxBytes=1000, backupCount=5)
+	filehandler.setLevel(logging.INFO)
+	streamhandler = logging.StreamHandler(sys.stdout)
+	streamhandler.setLevel(logging.DEBUG)
+	
+	formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%m/%d/%Y %I:%M:%S %p")
+	filehandler.setFormatter(formatter)
+	streamhandler.setFormatter(formatter)
+	
+	logger.addHandler(filehandler)
+	logger.addHandler(streamhandler)
+	
+	logger.info("== STARTING ==")
 	
 	cp = ConfigParser.ConfigParser()
 	cp.read(os.path.expanduser(CONFIGFILE))
