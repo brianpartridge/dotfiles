@@ -1,7 +1,8 @@
 # Setup development related variables
-export PATH=~/bin:~/src/appstore/scripts:$PATH
+export PATH=~/bin:~/src/appstore/scripts:/usr/local/Cellar/node/0.4.8/bin:$PATH
 export P4CONFIG=.p4config
 export TCROOT=/build/toolchain
+export NODE_PATH=/usr/local/lib/node
 
 # Aliases
 alias pr='pr.py'
