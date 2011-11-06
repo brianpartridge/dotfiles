@@ -136,7 +136,7 @@ class TransmissionTorrent(Torrent):
 def main():
     logger.setLevel(LOGLEVEL)
 
-    filehandler = logging.handlers.RotatingFileHandler(os.path.expanduser(LOGFILE), maxBytes=1000, backupCount=5)
+    filehandler = logging.handlers.RotatingFileHandler(os.path.expanduser(LOGFILE), maxBytes=10000, backupCount=5)
     filehandler.setLevel(logging.INFO)
     streamhandler = logging.StreamHandler(sys.stdout)
     streamhandler.setLevel(logging.DEBUG)
