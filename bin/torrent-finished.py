@@ -86,12 +86,12 @@ class Torrent(object):
             mediaFileCount = len(potentialMediaFiles)
             if mediaFileCount == 1:
                 result = os.path.join(target, potentialMediaFiles[0])
-            else if mediaFileCount == 0:
+            elif mediaFileCount == 0:
                 # No media files found, pass
                 pass
             else:
                 # TODO - filter out 'samples' so that the primary file can be found
-                logger.debug("Too many media files (%d), unable to determine primary file." % len(potentialMediaFiles)
+                logger.debug("Too many media files (%d), unable to determine primary file." % len(potentialMediaFiles))
                 pass
         else:
             base, ext = os.path.splitext(target)
@@ -108,8 +108,8 @@ class Torrent(object):
             dest = MOVIE_DIRECTORY
 
         if not (self.mediaFilePath and dest):
-            logger.debug("Not adding %s to media library", self.name)
-			return
+            logger.debug("Not adding %s to media library" % self.name)
+            return
 
         if self.isMovie():
             path, mediaFileName = os.path.split(self.mediaFilePath)
