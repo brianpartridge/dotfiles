@@ -13,7 +13,7 @@ import webbrowser
 
 def main2(options, args):
     guess = True
-    cmd = "/build/trees/bin/post-review" 
+    cmd = "/build/apps/bin/post-review" 
     guessOptions = "--guess-description --guess-summary"
     
     # Check tweak command based on user input
