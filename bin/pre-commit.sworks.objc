@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Checks for code formatting that breaks our Objective-C coding standard.
+#
+# To enable this hook, rename this file to "pre-commit".
+# 
+
+# Find staged files that have been modified or added, not deleted.
+files=$(git diff-index --cached HEAD --name-status | grep -v ^D | grep  \.[hm]$ | cut -c3-)
+if [ "$files" != "" ]
+then
+   for f in $files
+   do
+      # Check for tailing whitespace in each file.
+      lines=$(grep [[:space:]]$ "$f")
+      if [ "$lines" != "" ]
+      then
+         echo "[ERROR] $f has trailing whitespace"
+         exit 1
+      fi
+      
+      # Check for extrememly long lines.
+      longestlength=$(awk ' { if ( length > L ) { L=length} }END{ print L }' "$f")
+      if [ $longestlength -gt 110 ]
+      then
+         echo "[ERROR] $f has long lines"
+         exit 1
+      fi
+      
+   done
+fi
