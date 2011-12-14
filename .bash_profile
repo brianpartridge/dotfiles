@@ -74,6 +74,10 @@ alias grep='grep --color'
 alias env='env | sort'
 alias gitxa="gitx --all"
 alias gitxc="gitx -c"
+# In-place remove trailing spaces and tabs in a file
+alias rmtrailingws="gsed -i 's/[ \t]*$//'"
+# In-place replace all tabs with 3 spaces
+alias rmtabs="gsed -i 's/\t/   /g'"
 
 # Enable git bash completion
 source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
