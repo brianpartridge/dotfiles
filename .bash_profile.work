@@ -6,7 +6,8 @@ export NODE_PATH=/usr/local/lib/node
 
 # Aliases
 alias pr='pr.py'
+alias pbweb='ssh partridgeb@partridgeb-web.eng.vmware.com'
 
 # Sandbox build projects in current branch using current HEAD
-alias sandbox-vcipad='/build/apps/bin/gobuild sandbox queue --bootstrap="vcipad-git=scm-git:vcipad.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcipad-git | sandbox-opener.py'
-alias sandbox-vcd-mobile='/build/apps/bin/gobuild sandbox queue --bootstrap="vcd-mobile=scm-git:vcd-mobile.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcd-mobile | sandbox-opener.py'
+alias sandbox-vcipad='/build/apps/bin/gobuild sandbox queue --store-trees --bootstrap="vcipad-git=scm-git:vcipad.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcipad-git | sandbox-opener.py'
+alias sandbox-vcd-mobile='/build/apps/bin/gobuild sandbox queue --store-trees --bootstrap="vcd-mobile=scm-git:vcd-mobile.git;%(branch);" --accept-defaults --changeset `git rev-parse --verify HEAD` --branch `git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/\1/"` vcd-mobile | sandbox-opener.py'
