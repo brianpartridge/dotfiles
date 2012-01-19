@@ -74,6 +74,7 @@ alias grep='grep --color'
 alias env='env | sort'
 alias gitxa="gitx --all"
 alias gitxc="gitx -c"
+alias gg="gitx"
 # In-place remove trailing spaces and tabs in a file
 alias rmtrailingws="gsed -i 's/[ \t]*$//'"
 # In-place replace all tabs with 3 spaces
