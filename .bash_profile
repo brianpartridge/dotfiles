@@ -18,12 +18,12 @@ WHITE="\[\033[1;37m\]"
 NO_COLOR="\[\033[0m\]"
 
 # Conditionally load more settings
-HOSTNAME=`hostname`
+HOSTNAME=`hostname -s`
 if [ "$HOSTNAME" = "nephthys" ]
 then
 	source ~/dotfiles/.bash_profile.nephthys
 else
-    if [ "$HOSTNAME" = "anubis.local" ]
+    if [ "$HOSTNAME" = "anubis" ]
     then
         source ~/dotfiles/.bash_profile.anubis
     else
