@@ -16,6 +16,9 @@ def main2(options, args):
     cmd = "/build/apps/bin/post-review" 
     guessOptions = "--guess-description --guess-summary"
     
+    # Opt out of SHA insertion, let post-review figure it out
+    cmd += " opt-out"
+
     # Check tweak command based on user input
     if options.review_id:
         cmd += " -r %d" %options.review_id
