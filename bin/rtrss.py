@@ -40,7 +40,7 @@ import logging
 import logging.handlers
 
 # Configuration
-CONFIGFILE = "~/dotfiles/.rtrss.conf"
+CONFIGFILE = "~/Dropbox/.rtrss.conf"
 TORRENT_DIRECTORY = "~/rsstorrents"
 LOGFILE = "~/logs/rtrss.log"
 LOGLEVEL = logging.DEBUG
