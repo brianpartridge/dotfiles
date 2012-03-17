@@ -16,6 +16,7 @@ import re
 
 # Configuration
 MEDIA_ROOT = "/Volumes/DroboFS/tdb113070198/1/Public/media"
+MEDIA_ROOT = "/Volumes/Public/media"
 TV_DIRECTORY = os.path.join(MEDIA_ROOT, "tv-freeform")
 MOVIE_DIRECTORY = os.path.join(MEDIA_ROOT, "movies-misc")
 LOGFILE = "~/logs/torrent-finished.log"

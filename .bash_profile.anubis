@@ -6,6 +6,7 @@ export s1=/Volumes/Storage1
 export s2=/Volumes/Storage2
 export drobo=/Volumes/DroboFS/tdb113070198/1/Public
 export media=$drobo/media
+export media=/Volumes/Public/media
 export dow=$s1/downloads
 export mov=$media/movies-misc
 export movc=$media/movies-classics
