@@ -21,6 +21,8 @@ TV_DIRECTORY = os.path.join(MEDIA_ROOT, "tv-freeform")
 MOVIE_DIRECTORY = os.path.join(MEDIA_ROOT, "movies-misc")
 LOGFILE = "~/logs/torrent-finished.log"
 LOGLEVEL = logging.DEBUG
+FILE_LOGLEVEL = logging.INFO
+CONSOLE_LOGLEVEL = logging.DEBUG
 
 # DO NOT MODIFY BELOW THIS LINE #
 
@@ -76,6 +78,7 @@ class Torrent(object):
         result = None
         target = self.path()
         mediaExtensions = [".mkv", ".avi", ".mov"]
+        invalidSubstrings = ["sample",]
         if os.path.isdir(target):
             # Search the directory for media files
             entries = os.listdir(target)
@@ -83,15 +86,24 @@ class Torrent(object):
             for e in entries:
                 base, ext = os.path.splitext(e)
                 if ext in mediaExtensions:
-                    potentialMediaFiles.append(e) 
+                    # Found a media file, now look for invalid substrings
+                    isInvalid = False
+                    for substring in invalidSubstrings:
+                        if (base.lower()).find(substring.lower()) != -1:
+                            isInvalid = True
+                            logger.debug("Invalid media file '%s', contains '%s'", e, substring)
+                            break
+                    if not isInvalid:
+                        potentialMediaFiles.append(e) 
+
+            # Handle the results
             mediaFileCount = len(potentialMediaFiles)
             if mediaFileCount == 1:
                 result = os.path.join(target, potentialMediaFiles[0])
             elif mediaFileCount == 0:
-                # No media files found, pass
+                logger.debug("No media files found.")
                 pass
             else:
-                # TODO - filter out 'samples' so that the primary file can be found
                 logger.debug("Too many media files (%d), unable to determine primary file." % len(potentialMediaFiles))
                 pass
         else:
@@ -172,9 +184,9 @@ def main():
     logger.setLevel(LOGLEVEL)
 
     filehandler = logging.handlers.RotatingFileHandler(os.path.expanduser(LOGFILE), maxBytes=10000, backupCount=5)
-    filehandler.setLevel(logging.INFO)
+    filehandler.setLevel(FILE_LOGLEVEL)
     streamhandler = logging.StreamHandler(sys.stdout)
-    streamhandler.setLevel(logging.DEBUG)
+    streamhandler.setLevel(CONSOLE_LOGLEVEL)
     
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%m/%d/%Y %I:%M:%S %p")
     filehandler.setFormatter(formatter)
