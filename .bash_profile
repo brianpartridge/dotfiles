@@ -75,6 +75,10 @@ alias env='env | sort'
 alias gitxa="gitx --all"
 alias gitxc="gitx -c"
 alias gg="gitx"
+# Current branch name
+alias gbn="git branch --no-color 2> /dev/null | sed -e /^[^*]/d -e \"s/* \(.*\)/\1/\""
+# Diff current branch with master
+alias gbd=git_branch_diff.sh
 # In-place remove trailing spaces and tabs in a file
 alias rmtrailingws="gsed -i 's/[ \t]*$//'"
 # In-place replace all tabs with 3 spaces
