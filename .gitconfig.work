@@ -23,7 +23,6 @@
 [advice]
 	statusHints = false
 [core]
-	whitespace = trailing-space,space-before-tab
 [branch]
 	autosetupmerge = true
 [merge]
@@ -36,3 +35,12 @@
 	cmd = ksdiff-wrapper git \"$LOCAL\" \"$REMOTE\"
 [reviewboard]
 	url = https://reviewboard.eng.vmware.com
+[core]
+	whitespace = trailing-space,space-before-tab
+	excludesfile = /Users/partridgeb/.gitignore_global
+[difftool "sourcetree"]
+	cmd = /Users/partridgeb/Applications/Kaleidoscope.app/Contents/MacOS/ksdiff -w \"$LOCAL\" \"$REMOTE\"
+	path = 
+[mergetool "sourcetree"]
+	cmd = /Users/partridgeb/Library/Application Support/SourceTree/SourceTree 1.5.3/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	trustExitCode = true
