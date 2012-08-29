@@ -14,12 +14,17 @@ import webbrowser
 def main():
     # Read from stdin
     lines = sys.stdin.readlines()
+    print "%d lines" % len(lines)
     
     for line in lines:
         sys.stdout.write(line)
     
     # Open the browser if a success URL was provided
-    lastLine = lines[-1]
+    lastLine = None
+    if len(lines):
+       lastLine = lines[-1]
+    print "lastline %s" % lastLine
+    
     index = str.find(lastLine, "http")
     if index > 0:
         url = lastLine[index:]
