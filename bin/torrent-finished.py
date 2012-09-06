@@ -14,6 +14,9 @@ import logging.handlers
 import shutil
 import re
 
+# Import the t cli wrapper
+import tweet
+
 # Configuration
 MEDIA_ROOT = "/Volumes/DroboFS/tdb113070198/1/Public/media"
 MEDIA_ROOT = "/Volumes/Public/media"
@@ -115,10 +118,13 @@ class Torrent(object):
         
     def createMediaLibraryCopy(self):
         dest = None
+        category = ""
         if self.isTVShow():
             dest = TV_DIRECTORY
+            category = "TV Show"
         elif self.isMovie():
             dest = MOVIE_DIRECTORY
+            category = "Movie"
 
         if not (self.mediaFilePath and dest):
             logger.debug("Not adding %s to media library" % self.name)
@@ -136,12 +142,16 @@ class Torrent(object):
                 dest = newDest
 
         logger.info("Copying %s to %s" % (self.mediaFilePath, dest))
+
+        path, mediaFileName = os.path.split(self.mediaFilePath)
         try:
             shutil.copy(self.mediaFilePath, dest)
         except:
             logger.exception("Error while copying %s to %s" % (self.mediaFilePath, dest))
+            tweet.tweet("ERROR:%s - %s" % (category, mediaFileName))
         else:
             logger.info("Copy complete")
+            tweet.tweet("SUCCESS:%s - %s" % (category, mediaFileName))
             
         pass
     
@@ -200,6 +210,7 @@ def main():
     t = TransmissionTorrent()
     if not t.name:
         return
+    tweet.tweet("SUCCESS:Download - %s" % t.name)
     t.createMediaLibraryCopy()
 
 if __name__ == "__main__":
