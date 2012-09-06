@@ -39,6 +39,9 @@ import time
 import logging
 import logging.handlers
 
+# Import t cli wrapper
+import tweet
+
 # Configuration
 CONFIGFILE = "~/Dropbox/rtrss.conf"
 TORRENT_DIRECTORY = "~/rsstorrents"
@@ -63,11 +66,13 @@ class Episode():
 		self.episode = episode
 		
 	def Get(self):
-		msg = "Getting: %s S%dE%d" % (self.name, self.season, self.episode)
+		msg = "Getting: %s S%02dE%02d" % (self.name, self.season, self.episode)
 		print msg
 		logger.info(msg)
 
-		filename = os.path.join(os.path.expanduser(TORRENT_DIRECTORY), "%s S%dE%d rtRSS.torrent" % (self.name, self.season, self.episode))
+		tweet.tweet("START:Download - %s S%02dE%02d" % (self.name, self.season, self.episode))
+
+		filename = os.path.join(os.path.expanduser(TORRENT_DIRECTORY), "%s S%02dE%02d rtRSS.torrent" % (self.name, self.season, self.episode))
 		try:
 			urllib.urlretrieve(self.url, filename)
 			# Set metadata that could be useful later
