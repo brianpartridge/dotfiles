@@ -2,9 +2,9 @@
 
 """
 rtrss.py
-Version 0.4
+Version 0.5
 
-Copyright (c) 2011 Brian Partridge
+Copyright (c) 2012 Brian Partridge
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation
@@ -77,8 +77,6 @@ class Episode():
 			urllib.urlretrieve(self.url, filename)
 			# Set metadata that could be useful later
 			meta = {1:'type=tv', 2:'name=%s' % self.name, 3:'season=%s' % str(self.season), 4:'episode=%s' % str(self.episode)}
-			if self.name == "ufc.main.events":
-				meta = {}
 		except IOError, e:
 			logger.exception("Error retrieving torrent from: %s at: %s" % (self.url, filename))
 			
@@ -142,22 +140,7 @@ class TvFeed():
 			elif "h.264" in e.title:
 				e.title = e.title.replace("h.264", "")
 					
-			if "UFC" in self.keywords:
-				# specific for UFC episodes which don't have a season
-				# get info from entry title
-				result = re.match(r'UFC (\d+)', e.title)
-				if result:
-					invalidKeywords = ("countdown", "preliminary", "primetime")
-					for invalidKeyword in invalidKeywords:
-						if invalidKeyword in e.title.lower():
-							logger.debug("Skipping the %s episode" % invalidKeyword);
-							continue
-					ep = Episode(e.link, self.name, 0, int(result.groups()[0]))
-				else:
-					# error nothing to compare against
-					logger.debug("No PPV number found.")
-					continue
-			elif "Part" in self.keywords:
+			if "Part" in self.keywords:
 				# specific for series that use 'Parts' rather then episodes and don't have a season
 				# get info from entry title
 				result = re.match(r'.+[\._ \-]+Part (\d+)', e.title)
