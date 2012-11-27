@@ -16,6 +16,7 @@
 	d = diff
 	ds = diff --stat
 	dt = difftool
+	mt = mergetool
 	b = branch
 	l = log
 	ls = log --stat
@@ -24,13 +25,25 @@
 	statusHints = false
 [core]
 	whitespace = trailing-space,space-before-tab
+	excludesfile = /Users/brian/.gitignore_global
 [branch]
 	autosetupmerge = true
 [merge]
 	stat = true
+	tool = Kaleidoscope
 [diff]
 	tool = Kaleidoscope
 [difftool]
 	prompt = false
 [difftool "Kaleidoscope"]
-	cmd = ksdiff-wrapper git \"$LOCAL\" \"$REMOTE\"
+	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+[difftool "sourcetree"]
+	cmd = /Users/brian/Applications/Kaleidoscope.app/Contents/MacOS/ksdiff -w \"$LOCAL\" \"$REMOTE\"
+	path = 
+[mergetool "sourcetree"]
+	cmd = /Users/brian/Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	trustExitCode = true
+[mergetool "Kaleidoscope"]
+	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
+[mergetool]
+	prompt = false
