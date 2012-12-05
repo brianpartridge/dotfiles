@@ -20,6 +20,7 @@
 	l = log
 	ls = log --stat
 	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset' --abbrev-commit --date=relative
+	ksreview = "!f() { local SHA=${1:-HEAD}; local BRANCH=${2:-master}; if [ $SHA == $BRANCH ]; then SHA=HEAD; fi; git difftool -y -t Kaleidoscope $BRANCH...$SHA; }; f"
 [advice]
 	statusHints = false
 [core]
@@ -27,12 +28,13 @@
 	autosetupmerge = true
 [merge]
 	stat = true
+	tool = Kaleidoscope
 [diff]
 	tool = Kaleidoscope
 [difftool]
 	prompt = false
 [difftool "Kaleidoscope"]
-	cmd = ksdiff-wrapper git \"$LOCAL\" \"$REMOTE\"
+	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
 [reviewboard]
 	url = https://reviewboard.eng.vmware.com
 [core]
@@ -44,3 +46,7 @@
 [mergetool "sourcetree"]
 	cmd = /Users/partridgeb/Library/Application Support/SourceTree/SourceTree 1.5.3/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
 	trustExitCode = true
+[mergetool "Kaleidoscope"]
+	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
+[mergetool]
+	prompt = false
