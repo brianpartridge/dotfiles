@@ -17,18 +17,10 @@ YELLOW="\[\033[1;33m\]"
 WHITE="\[\033[1;37m\]"
 NO_COLOR="\[\033[0m\]"
 
-# Conditionally load more settings
-HOSTNAME=`hostname -s`
-if [ "$HOSTNAME" = "nephthys" ]
-then
-	source ~/dotfiles/.bash_profile.nephthys
-else
-    if [ "$HOSTNAME" = "anubis" ]
-    then
-        source ~/dotfiles/.bash_profile.anubis
-    else
-	    source ~/dotfiles/.bash_profile.work
-    fi
+# Conditionally load host-specifc extended profile settings
+EXTENDED_PROFILE=".bash_profile_ex"
+if [ -e "$EXTENDED_PROFILE" ]; then
+  source "$EXTENDED_PROFILE"
 fi
 
 # Show git branch in prompt
