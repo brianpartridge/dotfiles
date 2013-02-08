@@ -18,7 +18,7 @@ import json
 from optparse import OptionParser
 
 # Import the t cli wrapper
-# import tweet
+import tweet
 
 # Config
 
@@ -84,16 +84,16 @@ def processWatchlist():
         name = entry['title']
         link = entry['link']
         logger.info("Adding %s - %s" % (name, link))
-        addToWishlist(link)
+        addToWishlist(name, link)
         
-        # TODO: test tweeting
-        # tweet.tweet("SUCCESS:Watchlist - %s" % name)
+        # Don't hammer the wishlist, wait a few secs
+        time.sleep(5)
     
     persistLatestEntryDate(newestEntryDate)
     
-def addToWishlist(imdbURL):
+def addToWishlist(title, imdbURL):
     cookie = '"%s"' % loadWishlistCookie()
-    imdb = '"imdb=%s"' % imdbURL
+    imdb = "imdb=%s" % imdbURL
     args = ["curl", "--silent", "-X", "POST", "-d", imdb, "-b", cookie, WISHLIST_URL]
     logger.debug("CURL cmd: %s" % str(args))
     output = subprocess.check_output(args)
@@ -101,11 +101,12 @@ def addToWishlist(imdbURL):
     result = json.loads(output)
     status = result['status']
     if status == 1:
-        title = result['data']['title']
         logger.info("Added %s to wishlist" % title)
+        tweet.tweet("SUCCESS:Watchlist - %s - %s" % (title, imdbURL))
     else:
         message = result['message']
-        logger.error("Unable to add %s to wishlist: %s" % (imdbURL, message))
+        logger.error("Unable to add %s to wishlist: %s" % (title, message))
+        tweet.tweet("FAILURE:Watchlist - %s - %s - %s" % (title, imdbURL, message))
 
 def main2(options, args):
     logger.setLevel(LOGLEVEL)
