@@ -43,7 +43,7 @@ import logging.handlers
 import tweet
 
 # Configuration
-CONFIGFILE = "~/Dropbox/rtrss.conf"
+CONFIGFILE = "~/Dropbox/conf/rtrss.conf"
 TORRENT_DIRECTORY = "~/rsstorrents"
 LOGFILE = "~/logs/rtrss.log"
 LOGLEVEL = logging.DEBUG
