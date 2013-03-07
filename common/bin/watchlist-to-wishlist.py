@@ -70,6 +70,7 @@ def loadWishlistCookie():
 def processWatchlist():
     entriesToAdd = []
     newestEntryDate = lastKnownEntryDate = loadLatestEntryDate()
+    needsSave = False
     
     ff = feedparser.parse(WATCHLIST_FEED_URL)
     logger.info("Processing %d entries" % len(ff['entries']))
@@ -79,6 +80,7 @@ def processWatchlist():
             entriesToAdd.append(entry)
             if (time.mktime(date) - time.mktime(newestEntryDate)) > 0:
                 newestEntryDate = date
+                needsSave = True
 
     for entry in entriesToAdd:
         name = entry['title']
@@ -88,8 +90,9 @@ def processWatchlist():
         
         # Don't hammer the wishlist, wait a few secs
         time.sleep(5)
-    
-    persistLatestEntryDate(newestEntryDate)
+
+    if needsSave:
+        persistLatestEntryDate(newestEntryDate)
     
 def addToWishlist(title, imdbURL):
     cookie = '"%s"' % loadWishlistCookie()
