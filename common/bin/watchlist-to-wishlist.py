@@ -46,11 +46,11 @@ def loadLatestEntryDate():
         return time.localtime(0)
         
     logger.debug("Loaded: %s" % dateString)
-    date = time.strptime(dateString, "%a, %d %b %Y %H:%M:%S")
+    date = time.strptime(dateString, "%a, %d %b %Y %H:%M:%S %Z")
     return date
 
 def persistLatestEntryDate(date):
-    dateString = time.strftime("%a, %d %b %Y %H:%M:%S", date)
+    dateString = time.strftime("%a, %d %b %Y %H:%M:%S %Z", date)
     logger.debug("Persisting: %s" % dateString)
     
     path = os.path.expanduser(WATCHLIST_CONFIGFILE)
@@ -75,11 +75,11 @@ def processWatchlist():
     ff = feedparser.parse(WATCHLIST_FEED_URL)
     logger.info("Processing %d entries" % len(ff['entries']))
     for entry in ff['entries']:
-        date = entry['published_parsed']
-        if (time.mktime(date) - time.mktime(lastKnownEntryDate)) > 0:
+        feedEntryDate = entry['published_parsed']
+        if time.mktime(feedEntryDate) > time.mktime(lastKnownEntryDate):
             entriesToAdd.append(entry)
-            if (time.mktime(date) - time.mktime(newestEntryDate)) > 0:
-                newestEntryDate = date
+            if time.mktime(feedEntryDate) > time.mktime(newestEntryDate):
+                newestEntryDate = feedEntryDate
                 needsSave = True
 
     for entry in entriesToAdd:
