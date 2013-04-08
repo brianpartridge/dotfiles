@@ -79,3 +79,7 @@ alias rmtabs="gsed -i 's/\t/   /g'"
 # Enable git bash completion
 source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
 complete -o default -o nospace -F _git g
+
+if [ `uname` == "Darwin" ]; then
+  chflags nohidden ~/Library
+fi
