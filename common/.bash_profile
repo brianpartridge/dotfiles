@@ -53,6 +53,7 @@ function bman {
 }
 
 # Aliases
+alias o='open'
 alias g='git'
 alias gd='git diff'
 alias gdt='git difftool'
