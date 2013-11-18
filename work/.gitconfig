@@ -3,9 +3,6 @@
 [user]
 	name = Brian Partridge
 	email = partridgeb@vmware.com
-[github]
-	user = brianpartridge
-	token = 75661c7323f8d71dbc2ccd3ccbae3a56
 [alias]
 	merge = merge --no-ff
 	s = status
