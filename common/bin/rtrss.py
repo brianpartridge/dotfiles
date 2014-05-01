@@ -58,27 +58,51 @@ class RtRssFault(Exception):
 	def __init__(self, msg):
 		self.msg = msg
 
+##### Episodes #####
+
 class Episode():
-	def __init__(self, url, name, season, episode):
+	def __init__(self, url, name):
 		self.url = url
 		self.name = name
-		self.season = season
-		self.episode = episode
-		
+
+	def displayName(self):
+		return self.name
+        
+	def isValid(self):
+		return True
+        
 	def Get(self):
-		msg = "Getting: %s S%02dE%02d" % (self.name, self.season, self.episode)
+		msg = "Getting: %s " % self.displayName()
 		print msg
 		logger.info(msg)
 
-		tweet.tweet("START:Download - %s S%02dE%02d" % (self.name, self.season, self.episode))
+		tweet.tweet("START:Download - %s" % self.displayName())
 
-		filename = os.path.join(os.path.expanduser(TORRENT_DIRECTORY), "%s S%02dE%02d rtRSS.torrent" % (self.name, self.season, self.episode))
+		filename = os.path.join(os.path.expanduser(TORRENT_DIRECTORY), "%s rtRSS.torrent" % self.displayName())
 		try:
 			urllib.urlretrieve(self.url, filename)
-			# Set metadata that could be useful later
-			meta = {1:'type=tv', 2:'name=%s' % self.name, 3:'season=%s' % str(self.season), 4:'episode=%s' % str(self.episode)}
 		except IOError, e:
 			logger.exception("Error retrieving torrent from: %s at: %s" % (self.url, filename))
+            
+	def __gt__(self, rhs):
+		if self < rhs:
+			return False
+		if self == rhs:
+			return False
+		return True
+    
+class SeasonalEpisode(Episode):
+	def __init__(self, url, name, season, episode):
+		self.url = url
+		self.name = name
+		self.season = int(season)
+		self.episode = int(episode)
+		
+	def displayName(self):
+		return "%s S%02dE%02d" % (self.name, self.season, self.episode)
+        
+	def isValid(self):
+		return (self.season != 0 and self.episode != 0)
 			
 	def __lt__(self, rhs):
 		if self.season < rhs.season:
@@ -91,6 +115,36 @@ class Episode():
 		if self.season == rhs.season and self.episode == rhs.episode:
 			return True
 		return False
+        
+class DatedEpisode(Episode):
+	def __init__(self, url, name, year, month, day):
+		self.url = url
+		self.name = name
+		self.year = int(year)
+		self.month = int(month)
+		self.day = int(day)
+		
+	def displayName(self):
+		return "%s %04d-%02d-%02d" % (self.name, self.year, self.month, self.day)
+			
+	def isValid(self):
+		return (self.year != 0 and self.month != 0 and self.day != 0)
+        
+	def __lt__(self, rhs):
+		if self.year < rhs.year:
+			return True
+		elif self.year == rhs.year and self.month < rhs.month:
+			return True
+		elif self.year == rhs.year and self.month == rhs.month and self.day < rhs.day:
+			return True
+		return False
+		
+	def __eq__(self, rhs):
+		if self.year == rhs.year and self.month == rhs.month and self.day == rhs.day:
+			return True
+		return False
+        
+##### Feeds #####
 
 class TvFeed():
 	def __init__(self, args):
@@ -98,9 +152,10 @@ class TvFeed():
 		self.keywords = args['keywords']
 		self.name = args['name']
 		self.label = args['label']
-		self.last_season = args['season']
-		self.last_episode = args['episode']
-		
+        
+	def episodeForEntry(self, entry):
+		pass
+        
 	def ListEpisodes(self):
 		logger.debug("Processing %s" % self.label)
 		
@@ -140,40 +195,92 @@ class TvFeed():
 			elif "h.264" in e.title:
 				e.title = e.title.replace("h.264", "")
 					
-			if "Part" in self.keywords:
-				# specific for series that use 'Parts' rather then episodes and don't have a season
-				# get info from entry title
-				result = re.match(r'.+[\._ \-]+Part (\d+)', e.title)
-				if result:
-					ep = Episode(e.link, self.name, 0, int(result.groups()[0]))
-				else:
-					# error nothing to compare against
-					logger.debug("No part number found.")
-					continue
-			else:
-				# get info from entry title
-				result = re.match(r'(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]', e.title)
-				if result:
-					# if no season # was found default to 1
-					# necessary for miniseries
-					if result.groups()[1]:
-						s_num = int(result.groups()[1])
-					else:
-						s_num = 1
-
-					e_num = int(result.groups()[2])
-
-					#ep = Episode(e.link, result.groups()[0], s_num, e_num)
-					ep = Episode(e.link, self.name, s_num, e_num)
-				else:
-					# error nothing to compare against
-					logger.debug("No season/episode number found.")
-					continue
+			ep = self.episodeForEntry(e)
+			if ep is None:
+				continue
 			eps.append(ep)
 			
 			# next
 		
 		return eps
+    
+	def currentEpisode(self):
+		return None
+
+class SeasonalTvFeed(TvFeed):
+	def __init__(self, args):
+		self.url = args['url']
+		self.keywords = args['keywords']
+		self.name = args['name']
+		self.label = args['label']
+		self.last_season = args['season']
+		self.last_episode = args['episode']
+        
+	def episodeForEntry(self, entry):
+		ep = None
+		if "Part" in self.keywords:
+			# specific for series that use 'Parts' rather then episodes and don't have a season
+			# get info from entry title
+			result = re.match(r'.+[\._ \-]+Part (\d+)', entry.title)
+			if result:
+				ep = SeasonalEpisode(entry.link, self.name, 0, int(result.groups()[0]))
+			else:
+				# error nothing to compare against
+				logger.debug("No part number found.")
+		else:
+			# get info from entry title
+			result = re.match(r'(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]', entry.title)
+			if result:
+				# if no season # was found default to 1
+				# necessary for miniseries
+				if result.groups()[1]:
+					s_num = int(result.groups()[1])
+				else:
+					s_num = 1
+
+				e_num = int(result.groups()[2])
+
+				ep = SeasonalEpisode(entry.link, self.name, s_num, e_num)
+			else:
+				# error nothing to compare against
+				logger.debug("No season/episode number found.")
+		return ep
+        
+	def currentEpisode(self):
+		return SeasonalEpisode(None, self.name, self.last_season, self.last_episode)
+        
+class DatedTvFeed(TvFeed):
+	def __init__(self, args):
+		self.url = args['url']
+		self.keywords = args['keywords']
+		self.name = args['name']
+		self.label = args['label']
+		self.last_year = args['year']
+		self.last_month = args['month']
+		self.last_day = args['day']
+        
+	def episodeForEntry(self, entry):
+		ep = None
+		# get info from entry title
+		result = re.match(r'.+(\d{4})-(\d{2})-(\d{2})', entry.title)
+		if result:
+			year = int(result.groups()[0])
+			month = int(result.groups()[1])
+			day = int(result.groups()[2])
+			ep = DatedEpisode(entry.link, self.name, year, month, day)
+		else:
+			# error nothing to compare against
+			logger.debug("No date found.")
+		return ep
+        
+	def currentEpisode(self):
+		return DatedEpisode(None, self.name, self.last_year, self.last_month, self.last_day)
+        
+def feedForArgs(args):
+	if args['type'] == 'dated':
+		return DatedTvFeed(args)
+	else:
+		return SeasonalTvFeed(args)
 
 def main(argv=None):
 	logger.setLevel(LOGLEVEL)
@@ -197,7 +304,7 @@ def main(argv=None):
 	
 	for show in cp.sections():
 		# initialize mandatory inputs
-		args = {'label': show, 'url': None, 'season': 0, 'episode': 0, 'name':None, 'keywords': []}
+		args = {'label': show, 'url': None, 'name':None, 'keywords': [], 'type':'seasonal', 'season':0, 'episode':0, 'year':0, 'month':0, 'day':0}
 		
 		# populate args
 		for key in args.keys():
@@ -213,40 +320,40 @@ def main(argv=None):
 			args['keywords'] = args['keywords'].split()
 		else:
 			keywords = []
-		feed = TvFeed(args)
+		feed = feedForArgs(args)
 	
 		# retrieve all episodes in the feed
 		eps = feed.ListEpisodes()
 
-		# remove duplicates
+		# remove duplicates and invalid episodes
 		final_eps = []
 		for ep in eps:
+			if not ep.isValid():
+				continue
 			if ep not in final_eps:
 				final_eps.append(ep)
+                
+		# identify the last retrieved episode
+		currentEp = feed.currentEpisode()
 			
 		# iterate over the eps and load new eps
+		latestEp = currentEp
 		final_eps.sort()
-		new_season = int(args['season'])
-		new_episode = int(args['episode'])
 		for ep in final_eps:
-			if ep.season > int(args['season']):
-				new_season = ep.season
-				new_episode = ep.episode
-			elif ep.season == int(args['season']):
-				if ep.episode > int(args['episode']):
-					new_episode = ep.episode
-				else:
-					continue
-			else:
-				continue
-					
-			if args['season'] != 0 and args['episode'] != 0:
+			if ep > currentEp:
 				ep.Get()
-
+				if ep > latestEp:
+					latestEp = ep
 			#next
 		
-		cp.set(show, 'season', new_season)
-		cp.set(show, 'episode', new_episode)
+        # update the latest episode in the config file
+		if isinstance(latestEp, SeasonalEpisode):
+			cp.set(show, 'season', latestEp.season)
+			cp.set(show, 'episode', latestEp.episode)
+		elif isinstance(latestEp, DatedEpisode):
+			cp.set(show, 'year', latestEp.year)
+			cp.set(show, 'month', latestEp.month)
+			cp.set(show, 'day', latestEp.day)
 				
 		#next
 
