@@ -77,6 +77,7 @@ alias rmtrailingws="gsed -i 's/[ \t]*$//'"
 # In-place replace all tabs with 3 spaces
 alias rmtabs="gsed -i 's/\t/   /g'"
 alias osxversion="system_profiler SPSoftwareDataType | grep \"System Version:\""
+alias servedir="python -m SimpleHTTPServer"
 
 # Enable git bash completion
 source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
