@@ -2,21 +2,19 @@
 export PATH=~/bin:$PATH
 
 # Important Folders
-export s1=/Volumes/Storage1
-export s2=/Volumes/Storage2
 export drobo=/Volumes/DroboFS/tdb113070198/1/Public
 export media=$drobo/media
 export media=/Volumes/Public/media
-export dow=$s1/downloads
+export dow=~/Transfers/complete
+export dowi=~/Transfers/incomplete
 export mov=$media/movies-misc
 export movc=$media/movies-classics
 export tv=$media/tv-freeform
 export tvo=$media/tv-organized
 
 # Alias to quickly navigate folders
-alias s1='cd $s1'
-alias s2='cd $s2'
 alias dow='cd $dow'
+alias dowi='cd $dowi'
 alias mov='cd $mov'
 alias movc='cd $movc'
 alias tv='cd $tv'
