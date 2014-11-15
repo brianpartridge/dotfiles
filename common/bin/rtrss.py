@@ -44,7 +44,7 @@ import tweet
 
 # Configuration
 CONFIGFILE = "~/Dropbox/conf/rtrss.conf"
-TORRENT_DIRECTORY = "~/rsstorrents"
+TORRENT_DIRECTORY = "~/Transfers/pending"
 LOGFILE = "~/logs/rtrss.log"
 LOGLEVEL = logging.DEBUG
 
