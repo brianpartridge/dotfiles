@@ -24,7 +24,7 @@ import tweet
 
 WATCHLIST_FEED_URL = "http://rss.imdb.com/user/ur13693513/watchlist"
 WATCHLIST_CONFIGFILE = "~/Dropbox/conf/watchlist.conf" # This file just contains the publish date of top most feed entry.
-WISHLIST_URL = "http://hdbits.org/json/wishlistAdd"
+WISHLIST_URL = "https://hdbits.org/json/wishlistAdd"
 WISHLIST_COOKIEFILE = "~/Dropbox/conf/wishlist.conf" # This file just contain the cookie values necessary to communicate with the wishlist site.
 LOGFILE = "~/logs/watchlist.log"
 LOGLEVEL = logging.DEBUG
