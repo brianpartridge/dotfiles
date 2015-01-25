@@ -53,31 +53,40 @@ function bman {
 }
 
 # Aliases
+## General
 alias o='open'
-alias g='git'
-alias gd='git diff'
-alias gdt='git difftool'
-alias gl='git log'
-alias glg='git lg'
-alias gs='git status'
 alias ls='ls -G'
 alias ls-la='ls -laG'
 alias cd..='cd ..'
 alias grep='grep --color'
 alias env='env | sort'
-alias gitxa="gitx --all"
-alias gitxc="gitx -c"
-alias gg="gitx"
-# Current branch name
-alias gbn="git branch --no-color 2> /dev/null | sed -e /^[^*]/d -e \"s/* \(.*\)/\1/\""
-# Diff current branch with master
-alias gbd=git_branch_diff.sh
+alias x='open -a /Applications/Xcode.app .'
+
+## Xcode
 # In-place remove trailing spaces and tabs in a file
 alias rmtrailingws="gsed -i 's/[ \t]*$//'"
 # In-place replace all tabs with 3 spaces
 alias rmtabs="gsed -i 's/\t/   /g'"
 alias osxversion="system_profiler SPSoftwareDataType | grep \"System Version:\""
 alias servedir="python -m SimpleHTTPServer"
+alias dxdd='echo "Deleting `cd ~/Library/Developer/Xcode; pwd`/DerivedData"; rm -rf ~/Library/Developer/Xcode/DerivedData'
+
+## Git
+alias g='git'
+alias gd='git diff'
+alias gdt='git difftool'
+alias gl='git log'
+alias glg='git lg'
+alias gs='git status'
+alias gitxa="gitx --all"
+alias gitxc="gitx -c"
+alias gg="gitx"
+alias gps='git pull && git submodule sync && git submodule update --init --recursive'
+alias gss='git submodule sync && git submodule update --init --recursive'
+# Current branch name
+alias gbn="git branch --no-color 2> /dev/null | sed -e /^[^*]/d -e \"s/* \(.*\)/\1/\""
+# Diff current branch with master
+alias gbd=git_branch_diff.sh
 
 # Enable git bash completion
 source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
@@ -87,3 +96,5 @@ if [ `uname` == "Darwin" ]; then
   chflags nohidden ~/Library
 fi
 
+
+export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
