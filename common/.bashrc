@@ -87,6 +87,13 @@ alias gss='git submodule sync && git submodule update --init --recursive'
 alias gbn="git branch --no-color 2> /dev/null | sed -e /^[^*]/d -e \"s/* \(.*\)/\1/\""
 # Diff current branch with master
 alias gbd=git_branch_diff.sh
+# In-place remove trailing spaces and tabs in a file
+alias rmtrailingws="gsed -i 's/[ \t]*$//'"
+# In-place replace all tabs with 3 spaces
+alias rmtabs="gsed -i 's/\t/   /g'"
+alias osxversion="system_profiler SPSoftwareDataType | grep \"System Version:\""
+alias servedir="python -m SimpleHTTPServer"
+alias ll="ls -la"
 
 # Enable git bash completion
 source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
