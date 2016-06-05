@@ -26,68 +26,119 @@ def save_config(hash)
   end
 end
 
-def feed_to_url_hash(config)
-  config['feeds'].map { |f| [f['name'], authenticated_url(f['url'], f['passkey_file'])] }.to_h
+def dl_item_path(item)
+    File.expand_path($dl_dir + item.title + '.torrent')
 end
 
-def authenticated_url(base_url, passkey_filename)
-  passkey = first_line_from_file(conf_file(passkey_filename))
-  url = URI.parse(base_url)
-  url.query = URI.encode_www_form(URI.decode_www_form(url.query) + [['passkey', passkey]])
-  url.to_s
+def download_item(item)
+    puts "Downloading #{item.title}"
+    open(dl_item_path(item), 'wb') do |f|
+        f << open(item.link).read
+    end
 end
 
-def load_feeds(feed_to_url)
-  feed_to_url.map do |k, v| 
-    feed = RSS::Parser.parse(open(v).read) 
-    [k, (feed ? feed.items : [])]
-  end.to_h
+# Handles loading feed content and caching it for the duration of the process.
+class FeedCache
+  def initialize(feed_dicts)
+    @feed_dict_by_name = feed_dicts.map { |f| [f['name'], f] }.to_h
+    @cache = {}
+  end
+  
+  def items_for_feed(feed_name)
+    return @cache[feed_name] if @cache.has_key? feed_name
+    
+    feed_dict = @feed_dict_by_name[feed_name]
+    if feed_dict.nil?
+      @cache[feed_name] = []
+    else
+      url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
+      feed = RSS::Parser.parse(open(url).read)
+      @cache[feed_name] = feed.nil? ? [] : feed.items
+    end
+    
+    @cache[feed_name]
+  end
+    
+  # Private
+  
+  def authenticated_url(base_url, passkey_filename)
+    passkey = first_line_from_file(conf_file(passkey_filename))
+    url = URI.parse(base_url)
+    url.query = URI.encode_www_form(URI.decode_www_form(url.query) + [['passkey', passkey]])
+    url.to_s
+  end
+  
 end
 
-# def dl_item_path(item)
-#     File.expand_path($dl_dir + item.title + '.torrent')
-# end
-#
-# def rss_url(internal_only)
-#     params = { 'passkey' => first_line_from_file(conf_file('hdbits-passkey')) }
-#     params['type_origin'] = 1 if internal_only
-#     'https://hdbits.org/rss/wishlist?' + URI.encode_www_form(params)
-# end
-#
-# def load_available_wishlist_items(internal_only=true)
-#     RSS::Parser.parse(open(rss_url(internal_only)).read).items
-# end
-#
-# # Only download items that are 720p, and remove duplicates to only download unique items.
-# def filter_items(items)
-#     items.select { |i| i.title[/720p/] }.uniq(&:description)
-# end
-#
-# def download_item(item)
-#     puts "Downloading #{item.title}"
-#     open(dl_item_path(item), 'wb') do |f|
-#         f << open(item.link).read
-#     end
-# end
+# Processes a feed of items into episodes based on a series dictionary.
+class FeedProcessor
+  def initialize(feed_cache)
+    @feed_cache = feed_cache
+  end
+  
+  def episodes_for_series(series_dict)
+    eps = episodes_for_series_in_feed(series_dict, series_dict['feed'])
+    return eps if eps.count > 0
+    
+    return episodes_for_series_in_feed(series_dict, series_dict['fallback'])
+  end
+  
+  # Private
+  
+  def episodes_for_series_in_feed(series_dict, feed_name)
+    keywords = series_dict['keywords'].split(' ')
+    last_seen_ep = Episode.episode_with_series_dict(series_dict)
+    
+    @feed_cache.items_for_feed(feed_name)
+      .select { |i| keywords.map(&:downcase).reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
+      .map { |i| Episode.episode_with_feed_item(i) }
+      .select { |e| e > last_seen_ep }
+  end
+    
+end
+
+# Model to simplify comparison of S#E#-based episodes
+class Episode
+  attr_reader :title, :season, :episode, :link
+  def initialize(title, season, episode, link)
+    @title = title
+    @season = season.to_i
+    @episode = episode.to_i
+  end
+  
+  def self.episode_with_feed_item(feed_item)
+    sanitized_title = feed_item.title.gsub(/h.264/i, '').gsub(/720p/i, '').gsub(/1080p/i, '')
+    m = sanitized_title.match(/^(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]/)
+    Episode.new(feed_item.title, m[2], m[3], feed_item.link)
+  end
+  
+  def self.episode_with_series_dict(series_dict)
+    Episode.new(series_dict['keywords'], series_dict['season'], series_dict['episode'], nil)
+  end
+  
+  def >(ep)
+    if @season > ep.season
+      true
+    elsif @season == ep.season && @episode > ep.episode
+      true
+    else
+      false
+    end
+  end
+  
+end
 
 def run!
   config = load_config
-
-  feed_to_url = feed_to_url_hash(config)
-  puts feed_to_url
-
-  feed_to_items = load_feeds(feed_to_url)
-  puts feed_to_items
+  cache = FeedCache.new(config['feeds'])
+  processor = FeedProcessor.new(cache)
   
-  series = config['series']
-    # all_items = load_available_wishlist_items()
-    # puts "#{all_items.count} available on wishlist"
-    #
-    # items = filter_items(all_items)
-    # puts "#{items.count} queued for download"
-    #
-    # items.each { |i| download_item(i) }
-    # puts "Done"
+  serieses = config['series']
+  serieses.each do |s|
+    puts "*** #{s['keywords']}"
+    puts "   " + processor.episodes_for_series(s).map(&:title).join(", ")
+  end
+  
 end
 
 run!
