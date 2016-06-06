@@ -16,10 +16,10 @@ for f in *; do
     DEST="$OUTDIR/$n"
     if [ "$ACTION" == "cp" ]; then
         echo "Copying to $DEST"
-        cp $f $DEST
+        cp "$f" "$DEST"
     elif [ "$ACTION" == "mv" ]; then
         echo "Moving to $DEST"
-        mv $f $DEST
+        mv "$f" "$DEST"
     else
         echo "$n"
     fi
