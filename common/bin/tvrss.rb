@@ -26,15 +26,32 @@ def save_config(hash)
   end
 end
 
-def dl_item_path(item)
-    File.expand_path($dl_dir + item.title + '.torrent')
+def dl_item_path(ep)
+    File.expand_path($dl_dir + ep.title + '.torrent')
 end
 
-def download_item(item)
-    puts "Downloading #{item.title}"
-    open(dl_item_path(item), 'wb') do |f|
-        f << open(item.link).read
+def download_ep(ep)
+    success "Downloading #{ep.title}"
+    open(dl_item_path(ep), 'wb') do |f|
+        f << open(ep.link).read
     end
+end
+
+def update_series_for_ep(series_dict, ep)
+  series_dict['season'] = ep.season
+  series_dict['episode'] = ep.episode
+end
+
+def info(message)
+  puts '💛  ' + message
+end
+
+def success(message)
+  puts '💚  ' + message
+end
+
+def fatal(message)
+  abort '💔  ' + message
 end
 
 # Handles loading feed content and caching it for the duration of the process.
@@ -54,6 +71,7 @@ class FeedCache
       url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
       feed = RSS::Parser.parse(open(url).read)
       @cache[feed_name] = feed.nil? ? [] : feed.items
+      success "Loaded #{@cache[feed_name].count} items for #{feed_name}"
     end
     
     @cache[feed_name]
@@ -87,11 +105,11 @@ class FeedProcessor
   
   def episodes_for_series_in_feed(series_dict, feed_name)
     keywords = series_dict['keywords'].split(' ')
-    last_seen_ep = Episode.episode_with_series_dict(series_dict)
+    last_seen_ep = ConfigEpisode.new(series_dict)
     
     @feed_cache.items_for_feed(feed_name)
       .select { |i| keywords.map(&:downcase).reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
-      .map { |i| Episode.episode_with_feed_item(i) }
+      .map { |i| FeedEpisode.new(i) }
       .select { |e| e > last_seen_ep }
   end
     
@@ -99,33 +117,78 @@ end
 
 # Model to simplify comparison of S#E#-based episodes
 class Episode
-  attr_reader :title, :season, :episode, :link
-  def initialize(title, season, episode, link)
-    @title = title
+  attr_reader :season, :episode
+  def initialize(season, episode)
     @season = season.to_i
     @episode = episode.to_i
   end
   
-  def self.episode_with_feed_item(feed_item)
-    sanitized_title = feed_item.title.gsub(/h.264/i, '').gsub(/720p/i, '').gsub(/1080p/i, '')
-    m = sanitized_title.match(/^(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]/)
-    Episode.new(feed_item.title, m[2], m[3], feed_item.link)
+  def title
+    nil
   end
   
-  def self.episode_with_series_dict(series_dict)
-    Episode.new(series_dict['keywords'], series_dict['season'], series_dict['episode'], nil)
+  def link
+    nil
+  end
+  
+  def display
+    "S%02iE%02i" % [@season, @episode]
+  end
+  
+  def <(ep)
+    (self <=> ep) == -1
   end
   
   def >(ep)
-    if @season > ep.season
-      true
-    elsif @season == ep.season && @episode > ep.episode
-      true
+    (self <=> ep) == 1
+  end
+  
+  def ==(ep)
+    (self <=> ep) == 0
+  end
+    
+  def <=>(ep)
+    if @season < ep.season
+      -1
+    elsif @season > ep.season
+      1
+    elsif @episode < ep.episode
+      -1
+    elsif @episode > ep.episode
+      1
     else
-      false
+      0
     end
   end
   
+end
+
+class FeedEpisode<Episode
+  def initialize(feed_item)
+    sanitized_title = feed_item.title.gsub(/h.264/i, '').gsub(/720p/i, '').gsub(/1080p/i, '')
+    m = sanitized_title.match(/^(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]/)
+    super(m[2], m[3])
+    @item = feed_item
+  end
+  
+  def title
+    @item.title
+  end
+  
+  def link
+    @item.link
+  end
+end
+
+class ConfigEpisode<Episode
+  def initialize(series_dict)
+    super(series_dict['season'], series_dict['episode'])
+    @series_dict = series_dict
+  end
+  
+  def title
+    @series_dict['keywords']
+  end
 end
 
 def run!
@@ -133,13 +196,23 @@ def run!
   cache = FeedCache.new(config['feeds'])
   processor = FeedProcessor.new(cache)
   
-  serieses = config['series']
-  serieses.each do |s|
-    puts "*** #{s['keywords']}"
-    puts "   " + processor.episodes_for_series(s).map(&:title).join(", ")
+  modified = false
+  config['series'].each do |s|
+    last_seen = ConfigEpisode.new(s)
+    info "Checking '#{s['keywords']}' newer than #{last_seen.display}..."
+    sorted_eps = processor.episodes_for_series(s).sort
+    next if sorted_eps.empty?
+    
+    eps = sorted_eps.uniq
+    info "Found #{sorted_eps.count} candidates, downloading #{eps.count}..."
+    eps.each { |e| download_ep(e) }
+    
+    update_series_for_ep(s, eps.last)
+    modified = true
   end
   
+  save_config(config) if modified
+  success 'Done'
 end
 
 run!
-
