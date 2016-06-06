@@ -6,7 +6,7 @@ require 'uri'
 
 $conf_dir = '~/Dropbox/conf/'
 $conf_filename = "tvrss.json"
-$dl_dir = '~/Dropbox/torrents/'
+$dl_dir = '~/Dropbox/torrents/tvrss-temp'
 
 def conf_file(filename)
     File.expand_path($conf_dir + filename)
