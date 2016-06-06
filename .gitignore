@@ -4,3 +4,29 @@
 # Python
 *.pyc
 
+# Square Commands
+common/bin/alias-host
+common/bin/apply-rails-template
+common/bin/cake
+common/bin/edit-rebase-fixup
+common/bin/far
+common/bin/fxup
+common/bin/g
+common/bin/git-cmp
+common/bin/git-scmp
+common/bin/gpr
+common/bin/hack
+common/bin/hoist-builds
+common/bin/interview
+common/bin/kochiku
+common/bin/on-call
+common/bin/pair
+common/bin/pairs-update
+common/bin/presidio
+common/bin/rdb
+common/bin/rubogit
+common/bin/ship
+common/bin/sqssh
+common/bin/tssh
+common/bin/under-indent
+common/bin/wtf
