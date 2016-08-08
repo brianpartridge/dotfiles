@@ -6,7 +6,7 @@ require 'uri'
 
 $conf_dir = '~/Dropbox/conf/'
 $conf_filename = "tvrss.json"
-$dl_dir = '~/Dropbox/torrents/tvrss-temp'
+$dl_dir = '~/Dropbox/torrents/'
 
 def conf_file(filename)
     File.expand_path($conf_dir + filename)
@@ -31,8 +31,9 @@ def dl_item_path(ep)
 end
 
 def download_ep(ep)
-    success "Downloading #{ep.title}"
-    open(dl_item_path(ep), 'wb') do |f|
+    path = dl_item_path(ep)
+    success "Downloading #{ep.title} to #{path}"
+    open(path, 'wb') do |f|
         f << open(ep.link).read
     end
 end
