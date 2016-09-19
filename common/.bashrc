@@ -55,6 +55,7 @@ function bman {
 # Aliases
 ## General
 alias o='open'
+alias be='bundle exec'
 alias ls='ls -G'
 alias ls-la='ls -laG'
 alias cd..='cd ..'
