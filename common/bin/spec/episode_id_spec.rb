@@ -68,6 +68,7 @@ describe 'EpisodeID' do
 
       expect(EpisodeID.from_release('Series.101.720p')).to eq(nil)
       expect(EpisodeID.from_release('S01E01')).to eq(nil)
+      expect(EpisodeID.from_release('Series S02 720p')).to eq(nil)
     end
   end
 end
