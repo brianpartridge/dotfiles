@@ -21,6 +21,7 @@ class FeedCache
       feed = RSS::Parser.parse(open(url).read)
       @cache[feed_name] = feed.nil? ? [] : feed.items
       info "Loaded #{@cache[feed_name].count} items for #{feed_name}"
+      feed.items.each { |i| debug i.title }
     end
     
     @cache[feed_name]

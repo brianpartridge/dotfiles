@@ -36,12 +36,23 @@ end
 # Logging
 
 def info(message)
-  puts '💛  ' + message
-  0
+  pretty_log('🔶', message)
+end
+
+def debug(message)
+  pretty_log('🔸', message)
 end
 
 def success(message)
-  puts '💚  ' + message
+  pretty_log('🔵', message)
+end
+
+def error(message)
+  pretty_log('🔴', message)
+end
+
+def pretty_log(emoji, message)
+  puts emoji + '  ' + message
   0
 end
 
