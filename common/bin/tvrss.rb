@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 
+require_relative 'lib/episode_id'
 require_relative 'lib/feed_cache'
 require 'json'
 require 'rss'
@@ -51,85 +52,43 @@ class FeedProcessor
     
     @feed_cache.items_for_feed(feed_name)
       .select { |i| keywords.map(&:downcase).reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
-      .map { |i| FeedEpisode.new(i) }
-      .select { |e| e > last_seen_ep }
+      .map { |i| FeedEpisode.from_feed_item(i) }
+      .reject { |i| i.nil? }
+      .select { |e| e.id > last_seen_ep.id }
   end
     
 end
 
-# Model to simplify comparison of S#E#-based episodes
+# Abstract model for S#E#-based episodes
 class Episode
-  attr_reader :season, :episode
-  def initialize(season, episode)
-    @season = season.to_i
-    @episode = episode.to_i
+  attr_reader :id
+  def initialize(id)
+    @id = id
   end
-  
-  def title
-    nil
-  end
-  
-  def link
-    nil
-  end
-  
-  def display
-    "S%02iE%02i" % [@season, @episode]
-  end
-  
-  def <(ep)
-    (self <=> ep) == -1
-  end
-  
-  def >(ep)
-    (self <=> ep) == 1
-  end
-  
-  def ==(ep)
-    (self <=> ep) == 0
-  end
-    
-  def <=>(ep)
-    if @season < ep.season
-      -1
-    elsif @season > ep.season
-      1
-    elsif @episode < ep.episode
-      -1
-    elsif @episode > ep.episode
-      1
-    else
-      0
-    end
-  end
-  
 end
 
+# An episode loaded from a feed
 class FeedEpisode<Episode
-  def initialize(feed_item)
-    sanitized_title = feed_item.title.gsub(/h.264/i, '').gsub(/720p/i, '').gsub(/1080p/i, '')
-    m = sanitized_title.match(/^(.+)[\._ \-][Ss]?(\d+)?[\._ \-]?[EeXx]?(\d{2})[\._ \-]/)
-    super(m[2], m[3])
-    @item = feed_item
+  attr_reader :title, :link
+  def initialize(id, title, link)
+    super(id)
+    @title = title
+    @link = link
   end
-  
-  def title
-    @item.title
-  end
-  
-  def link
-    @item.link
+
+  def self.from_feed_item(feed_item)
+    id = EpisodeID.from_release(feed_item.title)
+    return nil unless id
+    FeedEpisode.new(id, feed_item.title, feed_item.link)
   end
 end
 
+# An episode loaded from a config file
 class ConfigEpisode<Episode
+  attr_reader :title
   def initialize(series_dict)
-    super(series_dict['season'], series_dict['episode'])
-    @series_dict = series_dict
-  end
-  
-  def title
-    @series_dict['keywords']
+    super(EpisodeID.new(series_dict['season'], series_dict['episode']))
+    @title = series_dict['keywords']
   end
 end
 
@@ -141,11 +100,11 @@ def run!
   modified = false
   config['series'].each do |s|
     last_seen = ConfigEpisode.new(s)
-    info "Checking '#{s['keywords']}' newer than #{last_seen.display}..."
-    sorted_eps = processor.episodes_for_series(s).sort
+    info "Checking '#{s['keywords']}' newer than #{last_seen.id.to_s}..."
+    sorted_eps = processor.episodes_for_series(s).sort { |l,r| l.id < r.id }
     next if sorted_eps.empty?
     
-    eps = sorted_eps.uniq
+    eps = sorted_eps.uniq { |ep| ep.id }
     info "Found #{sorted_eps.count} candidates, downloading #{eps.count}..."
     eps.each { |e| download_ep(e) }
     
