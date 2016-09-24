@@ -40,7 +40,7 @@ def info(message)
 end
 
 def debug(message)
-  pretty_log('🔸', message)
+  pretty_log('  🔸', message)
 end
 
 def success(message)
