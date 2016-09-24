@@ -36,7 +36,20 @@ class FeedProcessor
   def initialize(feed_cache)
     @feed_cache = feed_cache
   end
-  
+
+  # All episode matching series keywords from the first series feed with matches.
+  def series_episodes(series_dict)
+    episodes_for_series(series_dict)
+  end
+
+  # All series_episodes which are new.
+  def candidate_episodes(series_dict)
+    last_seen_ep = ConfigEpisode.new(series_dict)
+    series_episodes(series_dict).select { |e| e.id > last_seen_ep.id }
+  end 
+ 
+  # Private
+
   def episodes_for_series(series_dict)
     eps = episodes_for_series_in_feed(series_dict, series_dict['feed'])
     return eps if eps.count > 0
@@ -44,19 +57,13 @@ class FeedProcessor
     return episodes_for_series_in_feed(series_dict, series_dict['fallback'])
   end
   
-  # Private
-  
   def episodes_for_series_in_feed(series_dict, feed_name)
     keywords = series_dict['keywords'].split(' ')
-    last_seen_ep = ConfigEpisode.new(series_dict)
-    
     @feed_cache.items_for_feed(feed_name)
       .select { |i| keywords.map(&:downcase).reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
       .map { |i| FeedEpisode.from_feed_item(i) }
       .reject { |i| i.nil? }
-      .select { |e| e.id > last_seen_ep.id }
   end
-    
 end
 
 # Abstract model for S#E#-based episodes
@@ -101,11 +108,18 @@ def run!
   config['series'].each do |s|
     last_seen = ConfigEpisode.new(s)
     info "Checking '#{s['keywords']}' newer than #{last_seen.id.to_s}..."
-    sorted_eps = processor.episodes_for_series(s).sort { |l,r| l.id < r.id }
-    next if sorted_eps.empty?
+    series_eps = processor.series_episodes(s)
+    series_eps.each { |e| debug "Match: #{e.title}" }
+
+    candidate_eps = processor.candidate_episodes(s)
+    candidate_eps.each { |e| debug "Candidate: #{e.title}" }
     
-    eps = sorted_eps.uniq { |ep| ep.id }
-    info "Found #{sorted_eps.count} candidates, downloading #{eps.count}..."
+    eps = candidate_eps.sort { |l, r| l.id < r.id }
+      .uniq { |e| e.id }
+    
+    info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{eps.count} new..." if series_eps.count > 0 || candidate_eps.count > 0
+    next if eps.empty?
+
     eps.each { |e| download_ep(e) }
     
     update_series_for_ep(s, eps.last)
