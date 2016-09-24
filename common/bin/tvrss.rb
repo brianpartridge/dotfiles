@@ -1,29 +1,20 @@
 #!/usr/bin/env ruby
 
+require_relative 'lib/feed_cache'
 require 'json'
 require 'rss'
 require 'uri'
+require_relative 'lib/utils'
 
-$conf_dir = '~/Dropbox/conf/'
 $conf_filename = "tvrss.json"
 $dl_dir = '~/Dropbox/torrents/'
 
-def conf_file(filename)
-    File.expand_path($conf_dir + filename)
-end
-
-def first_line_from_file(path)
-    File.readlines(File.expand_path(path)).first
-end
-
 def load_config
-  JSON.parse(open(conf_file($conf_filename)).read)
+  load_json_config($conf_filename)
 end
 
 def save_config(hash)
-  open(conf_file($conf_filename), 'wb') do |f|
-    f << JSON.pretty_generate(hash)
-  end
+  save_json_config($conf_filename, hash)
 end
 
 def dl_item_path(ep)
@@ -31,62 +22,12 @@ def dl_item_path(ep)
 end
 
 def download_ep(ep)
-    path = dl_item_path(ep)
-    success "Downloading #{ep.title} to #{path}"
-    open(path, 'wb') do |f|
-        f << open(ep.link).read
-    end
+    download(ep.link, ep.title, dl_item_path(ep))
 end
 
 def update_series_for_ep(series_dict, ep)
   series_dict['season'] = ep.season
   series_dict['episode'] = ep.episode
-end
-
-def info(message)
-  puts '💛  ' + message
-end
-
-def success(message)
-  puts '💚  ' + message
-end
-
-def fatal(message)
-  abort '💔  ' + message
-end
-
-# Handles loading feed content and caching it for the duration of the process.
-class FeedCache
-  def initialize(feed_dicts)
-    @feed_dict_by_name = feed_dicts.map { |f| [f['name'], f] }.to_h
-    @cache = {}
-  end
-  
-  def items_for_feed(feed_name)
-    return @cache[feed_name] if @cache.has_key? feed_name
-    
-    feed_dict = @feed_dict_by_name[feed_name]
-    if feed_dict.nil?
-      @cache[feed_name] = []
-    else
-      url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
-      feed = RSS::Parser.parse(open(url).read)
-      @cache[feed_name] = feed.nil? ? [] : feed.items
-      success "Loaded #{@cache[feed_name].count} items for #{feed_name}"
-    end
-    
-    @cache[feed_name]
-  end
-    
-  # Private
-  
-  def authenticated_url(base_url, passkey_filename)
-    passkey = first_line_from_file(conf_file(passkey_filename))
-    url = URI.parse(base_url)
-    url.query = URI.encode_www_form(URI.decode_www_form(url.query) + [['passkey', passkey]])
-    url.to_s
-  end
-  
 end
 
 # Processes a feed of items into episodes based on a series dictionary.

@@ -1,6 +1,6 @@
 require 'rss'
 require 'uri'
-require 'utils'
+require_relative 'utils'
 
 # Handles loading feed content and caching it for the duration of the process.
 # feed_dicts is an array of hashes with keys: 'name' (must be unique), 'url', and 'passkey_file' (optional)
