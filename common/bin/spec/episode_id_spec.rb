@@ -45,5 +45,30 @@ describe 'EpisodeID' do
       expect(@twoone.to_s).to eq('S02E01')
     end
   end
+
+  describe 'from_s' do
+    it 'parses' do
+      expect(EpisodeID.from_s('S01E01')).to eq(@oneone)
+      expect(EpisodeID.from_s('S1E2')).to eq(@onetwo)
+      expect(EpisodeID.from_s('S000002E000001')).to eq(@twoone)
+
+      expect(EpisodeID.from_s('s01e01')).to eq(nil)
+      expect(EpisodeID.from_s('1xE01')).to eq(nil)
+      expect(EpisodeID.from_s('101')).to eq(nil)
+    end
+  end
+  
+  describe 'from_release' do
+    it 'parses' do
+      expect(EpisodeID.from_release('Series.S01E01.720p')).to eq(@oneone)
+      expect(EpisodeID.from_release('Series.s01e01.720p')).to eq(@oneone)
+      expect(EpisodeID.from_release('Series.1x01.720p')).to eq(@oneone)
+      expect(EpisodeID.from_release('123.S01E01.720p')).to eq(@oneone)
+      expect(EpisodeID.from_release('Series.S01E01.123')).to eq(@oneone)
+
+      expect(EpisodeID.from_release('Series.101.720p')).to eq(nil)
+      expect(EpisodeID.from_release('S01E01')).to eq(nil)
+    end
+  end
 end
 
