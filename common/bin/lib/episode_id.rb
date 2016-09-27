@@ -34,6 +34,10 @@ class EpisodeID
   def ==(ep)
     (self <=> ep) == 0
   end
+
+  def eql?(ep)
+    return self == ep
+  end
     
   def <=>(ep)
     if @season < ep.season
@@ -49,5 +53,8 @@ class EpisodeID
     end
   end
   
+  def hash
+    to_s.hash
+  end
 end
 
