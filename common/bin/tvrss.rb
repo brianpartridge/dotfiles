@@ -18,12 +18,8 @@ def save_config(hash)
   save_json_config($conf_filename, hash)
 end
 
-def dl_item_path(ep)
-    File.expand_path($dl_dir + ep.title + '.torrent')
-end
-
 def download_ep(ep)
-    download(ep.link, ep.title, dl_item_path(ep))
+    download(ep.link, ep.title, $dl_dir, "#{ep.title}.torrent")
 end
 
 def update_series_for_ep(series_dict, ep)

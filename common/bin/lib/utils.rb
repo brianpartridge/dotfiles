@@ -24,12 +24,12 @@ end
 
 # File Downloading
 
-def download(url, name, outdir)
-    path = File.expand_path(outdir + name)
-    info "Downloading #{name} to #{path} from #{url}"
+def download(url, display_name, outdir, filename)
+    path = File.expand_path(outdir + filename)
+    info "Downloading '#{display_name}' to '#{path}' from '#{url}'"
     open(path, 'wb') do |f|
-        f << opene(url).read
-        success "Downloaded #{name} to #{path}"
+        f << open(url).read
+        success "Downloaded '#{display_name}' to '#{path}'"
     end
 end
 
