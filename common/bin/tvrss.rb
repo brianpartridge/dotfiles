@@ -23,8 +23,8 @@ def download_ep(ep)
 end
 
 def update_series_for_ep(series_dict, ep)
-  series_dict['season'] = ep.season
-  series_dict['episode'] = ep.episode
+  series_dict['season'] = ep.id.season
+  series_dict['episode'] = ep.id.episode
 end
 
 # Processes a feed of items into episodes based on a series dictionary.
@@ -110,7 +110,7 @@ def run!
     candidate_eps = processor.candidate_episodes(s)
     candidate_eps.each { |e| debug "Candidate: #{e.title}" }
     
-    eps = candidate_eps.sort { |l, r| l.id < r.id }
+    eps = candidate_eps.sort { |l, r| l.id <=> r.id }
       .uniq { |e| e.id }
     
     info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{eps.count} new..." if series_eps.count > 0 || candidate_eps.count > 0
