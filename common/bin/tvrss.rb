@@ -102,10 +102,10 @@ class TVRSS
     info "Checking '#{series_dict['keywords']}' newer than #{last_seen.id.to_s}..."
 
     series_eps = @processor.series_episodes(series_dict)
-    series_eps.each { |e| debug "Match: #{e.title}" }
+    series_eps.each { |e| info2 "Match: #{e.title}" }
 
     candidate_eps = @processor.candidate_episodes(series_dict)
-    candidate_eps.each { |e| debug "Candidate: #{e.title}" }
+    candidate_eps.each { |e| info2 "Candidate: #{e.title}" }
     
     fresh_eps = candidate_eps.sort { |l, r| l.id <=> r.id }.uniq { |e| e.id }
     info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{fresh_eps.count} new..." if series_eps.count > 0 || candidate_eps.count > 0

@@ -20,8 +20,8 @@ class FeedCache
       url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
       feed = RSS::Parser.parse(open(url).read)
       @cache[feed_name] = feed.nil? ? [] : feed.items
-      info "Loaded #{@cache[feed_name].count} items for #{feed_name}"
-      feed.items.each { |i| debug "Item: #{i.title}" }
+      info2 "Loaded #{@cache[feed_name].count} items for #{feed_name}"
+      #feed.items.each { |i| debug "Item: #{i.title}" }
     end
     
     @cache[feed_name]
