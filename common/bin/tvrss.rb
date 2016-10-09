@@ -18,17 +18,8 @@ def save_config(hash)
   save_json_config($conf_filename, hash)
 end
 
-def download_ep(ep)
-    download(ep.link, ep.title, $dl_dir, "#{ep.title}.torrent")
-end
-
-def update_series_for_ep(series_dict, ep)
-  series_dict['season'] = ep.id.season
-  series_dict['episode'] = ep.id.episode
-end
-
-# Processes a feed of items into episodes based on a series dictionary.
-class FeedProcessor
+# Identifies episodes in the feed cache for a given series. 
+class SeriesProcessor
   def initialize(feed_cache)
     @feed_cache = feed_cache
   end
@@ -95,34 +86,59 @@ class ConfigEpisode<Episode
   end
 end
 
+class TVRSS
+  def initialize(config, processor)
+    @config = config.clone
+    @processor = processor
+  end
+
+  def download_updates!
+    @config['series'].each { |s| process_series(s) }
+    return @config
+  end
+
+  def process_series(series_dict)
+    eps = fresh_eps_for_series(series_dict)
+    return if eps.empty?
+
+    eps.each { |e| download_ep(e) }
+    update_series(series_dict, eps.last)
+  end
+
+  def fresh_eps_for_series(series_dict)
+    last_seen = ConfigEpisode.new(series_dict)
+    info "Checking '#{series_dict['keywords']}' newer than #{last_seen.id.to_s}..."
+
+    series_eps = @processor.series_episodes(series_dict)
+    series_eps.each { |e| debug "Match: #{e.title}" }
+
+    candidate_eps = @processor.candidate_episodes(series_dict)
+    candidate_eps.each { |e| debug "Candidate: #{e.title}" }
+    
+    fresh_eps = candidate_eps.sort { |l, r| l.id <=> r.id }.uniq { |e| e.id }
+    info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{fresh_eps.count} new..." if series_eps.count > 0 || candidate_eps.count > 0
+         
+    fresh_eps
+  end
+
+  def download_ep(ep)
+    download(ep.link, ep.title, $dl_dir, "#{ep.title}.torrent")
+  end
+
+  def update_series(series_dict, latest_ep)
+    series_dict['season'] = latest_ep.id.season
+    series_dict['episode'] = latest_ep.id.episode
+  end
+end
+
 def run!
   config = load_config
   cache = FeedCache.new(config['feeds'])
-  processor = FeedProcessor.new(cache)
+  processor = SeriesProcessor.new(cache)
+  new_config = TVRSS.new(config, processor).download_updates!
+  puts new_config
   
-  modified = false
-  config['series'].each do |s|
-    last_seen = ConfigEpisode.new(s)
-    info "Checking '#{s['keywords']}' newer than #{last_seen.id.to_s}..."
-    series_eps = processor.series_episodes(s)
-    series_eps.each { |e| debug "Match: #{e.title}" }
-
-    candidate_eps = processor.candidate_episodes(s)
-    candidate_eps.each { |e| debug "Candidate: #{e.title}" }
-    
-    eps = candidate_eps.sort { |l, r| l.id <=> r.id }
-      .uniq { |e| e.id }
-    
-    info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{eps.count} new..." if series_eps.count > 0 || candidate_eps.count > 0
-    next if eps.empty?
-
-    eps.each { |e| download_ep(e) }
-    
-    update_series_for_ep(s, eps.last)
-    modified = true
-  end
-  
-  save_config(config) if modified
+  save_config(config) unless config == new_config
   success 'Done'
 end
 
