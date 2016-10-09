@@ -106,3 +106,8 @@ fi
 
 
 export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
+
+alias reload-tvrss="launchctl unload ~/Library/LaunchAgents/com.multipleentendre.tvrss.plist && launchctl load ~/Library/LaunchAgents/com.multipleentendre.tvrss.plist"
+alias check-tvrss="launchctl list | grep tvrss"
+alias tvrss-log="cat ~/logs/tvrss-job.log"
+alias clear-tvrss-log="rm ~/logs/tvrss-job.log"
