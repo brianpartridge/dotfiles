@@ -53,19 +53,11 @@ class SeriesProcessor
   end
 end
 
-# Abstract model for S#E#-based episodes
-class Episode
-  attr_reader :id
-  def initialize(id)
-    @id = id
-  end
-end
-
 # An episode loaded from a feed
-class FeedEpisode<Episode
-  attr_reader :title, :link
+class FeedEpisode
+  attr_reader :id, :title, :link
   def initialize(id, title, link)
-    super(id)
+    @id = id
     @title = title
     @link = link
   end
@@ -78,10 +70,10 @@ class FeedEpisode<Episode
 end
 
 # An episode loaded from a config file
-class ConfigEpisode<Episode
-  attr_reader :title
+class ConfigEpisode
+  attr_reader :id, :title
   def initialize(series_dict)
-    super(EpisodeID.new(series_dict['season'], series_dict['episode']))
+    @id = EpisodeID.new(series_dict['season'], series_dict['episode'])
     @title = series_dict['keywords']
   end
 end
@@ -136,7 +128,6 @@ def run!
   cache = FeedCache.new(config['feeds'])
   processor = SeriesProcessor.new(cache)
   new_config = TVRSS.new(config, processor).download_updates!
-  puts new_config
   
   save_config(config) unless config == new_config
   success 'Done'
