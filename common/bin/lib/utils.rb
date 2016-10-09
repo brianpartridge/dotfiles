@@ -39,16 +39,20 @@ def info(message)
   pretty_log('🔶', message)
 end
 
-def debug(message)
+def info2(message)
   pretty_log('  🔸', message)
 end
 
 def success(message)
-  pretty_log('🔵', message)
+  pretty_log('🔷', message)
+end
+
+def success2(message)
+  pretty_log('  🔹', message)
 end
 
 def error(message)
-  pretty_log('🔴', message)
+  pretty_log('♦️', message)
 end
 
 def pretty_log(emoji, message)

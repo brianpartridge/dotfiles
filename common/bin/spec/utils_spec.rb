@@ -3,10 +3,11 @@ require 'utils'
 
 describe 'Logging' do 
  it 'writes to STDOUT' do
-   expect { success('foo') }.to output("🔵  foo\n").to_stdout
-   expect { error('foo') }.to output("🔴  foo\n").to_stdout
+   expect { success('foo') }.to output("🔷  foo\n").to_stdout
+   expect { success2('foo') }.to output("  🔹  foo\n").to_stdout
+   expect { error('foo') }.to output("♦️  foo\n").to_stdout
    expect { info('foo') }.to output("🔶  foo\n").to_stdout
-   expect { debug('foo') }.to output("  🔸  foo\n").to_stdout
+   expect { info2('foo') }.to output("  🔸  foo\n").to_stdout
  end
 
  it 'fatal kills the process' do
