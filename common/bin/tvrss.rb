@@ -4,6 +4,7 @@ require_relative 'lib/episode_id'
 require_relative 'lib/feed_cache'
 require 'json'
 require 'rss'
+require_relative 'lib/tweet'
 require 'uri'
 require_relative 'lib/utils'
 
@@ -114,6 +115,7 @@ class TVRSS
   end
 
   def download_ep(ep)
+    tweet "START:Download - #{ep.title}"
     download(ep.link, ep.title, $dl_dir, "#{ep.title}.torrent")
   end
 
@@ -129,7 +131,7 @@ def run!
   processor = SeriesProcessor.new(cache)
   new_config = TVRSS.new(config, processor).download_updates!
   
-  save_config(config) unless config == new_config
+  save_config(config) # unless config == new_config
   success 'Done'
 end
 
