@@ -5,15 +5,13 @@
 import os
 
 def tweet(message):
-    t_cli = "/usr/bin/t"
-
-    # TODO: ensure that 't' exists
+    if len(os.popen("which t").read()) == 0:
+        return
 
     maxLength = 140
     msg = message
     if len(msg) > maxLength:
         msg = msg[:maxLength]
-    cmd = "%s update \"%s\"" % (t_cli, msg)
-    #print("tweet: %s" % cmd)
+    cmd = "t update \"%s\"" % msg
     os.popen(cmd)
 
