@@ -3,12 +3,14 @@
 require 'tempfile'
 require_relative 'lib/utils'
 
+# Open the current specified files in Kaledoscope
 def diff(left, right)
    lpath = write_temp_file(left)
    rpath = write_temp_file(right)
    `/usr/local/bin/ksdiff #{lpath} #{rpath}`
 end
 
+# Parse known formats into left and right content
 def parse_clipboard()
    content = `pbpaste` 
    match_data = content.match(/XCTAssertEqual failed: \((?<left>.*)\) is not equal to \((?<right>.*)\) -/)
@@ -16,6 +18,7 @@ def parse_clipboard()
    [match_data['left'], match_data['right']]
 end
 
+# Write a temporary file with the specified content
 def write_temp_file(content)
   f = Tempfile.new('kxd')
   f.write(content)
@@ -23,6 +26,7 @@ def write_temp_file(content)
   f.path
 end
 
+# Main entry point, checks the clipboard for diffable content and opens it in a diff viewer.
 def run!
   parts = parse_clipboard()
   diff(parts.first, parts.last)
