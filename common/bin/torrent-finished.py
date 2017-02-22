@@ -31,6 +31,10 @@ CONSOLE_LOGLEVEL = logging.DEBUG
 
 logger = logging.getLogger("torrent-finished logger")
 
+def social(message):
+    logger.info("tweeting: %s" % message)
+    tweet.tweet(message)
+
 def nameIsTVShow(name):
     # Old format: title delimiter s? number? delimiter? e? number delimiter
     # The problem with this regex is that it sometimes says movies are tv shows.
@@ -148,10 +152,12 @@ class Torrent(object):
             shutil.copy(self.mediaFilePath, dest)
         except:
             logger.exception("Error while copying %s to %s" % (self.mediaFilePath, dest))
-            tweet.tweet("ERROR:%s - %s" % (category, mediaFileName))
+            msg = "ERROR:%s - %s" % (category, mediaFileName)
+            social(msg)
         else:
             logger.info("Copy complete")
-            tweet.tweet("SUCCESS:%s - %s" % (category, mediaFileName))
+            msg = "SUCCESS:%s - %s" % (category, mediaFileName)
+            social(msg)
             
         pass
     
@@ -210,7 +216,7 @@ def main():
     t = TransmissionTorrent()
     if not t.name:
         return
-    tweet.tweet("SUCCESS:Download - %s" % t.name)
+    social("SUCCESS:Download - %s" % t.name)
     t.createMediaLibraryCopy()
 
 if __name__ == "__main__":
