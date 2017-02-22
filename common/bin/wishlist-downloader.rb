@@ -1,6 +1,7 @@
 #!/usr/bin/ruby
 
 require 'rss'
+require_relative 'lib/tweet'
 
 $conf_dir = '~/Dropbox/conf/'
 $dl_dir = '~/Dropbox/torrents/'
@@ -34,6 +35,7 @@ end
 
 def download_item(item)
     puts "Downloading #{item.title}"
+    tweet "START:Download - #{item.title}"
     open(dl_item_path(item), 'wb') do |f|
         f << open(item.link).read
     end
