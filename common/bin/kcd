@@ -11,11 +11,24 @@ def diff(left, right)
 end
 
 # Parse known formats into left and right content
-def parse_clipboard()
-   content = `pbpaste` 
-   match_data = content.match(/XCTAssertEqual failed: \((?<left>.*)\) is not equal to \((?<right>.*)\) -/)
-   fatal "Unable to parse input." unless match_data
-   [match_data['left'], match_data['right']]
+def parse_clipboard
+   content = `pbpaste`
+   
+   match_data = parse_equal_assertion(content)
+   return [match_data['left'], match_data['right']] if match_data
+   
+   match_data = parse_merge_confict(content)
+   return [match_data['left'], match_data['right']] if match_data
+   
+   fatal "Unable to parse input."
+end
+
+def parse_equal_assertion(content)
+  content.match(/XCTAssertEqual failed: \((?<left>.*)\) is not equal to \((?<right>.*)\) -/)
+end
+
+def parse_merge_confict(content)
+  
 end
 
 # Write a temporary file with the specified content
