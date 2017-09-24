@@ -5,11 +5,14 @@ export PATH=~/bin:$PATH
 export drobo=/Volumes/DroboFS/tdb113070198/1/Public
 export media=$drobo/media
 export media=/Volumes/Public/media
-export dow=~/Transfers/complete
-export dowi=~/Transfers/incomplete
+export media=~/Media
+export dow=~/Transfers/3_complete
+export dowi=~/Transfers/2_incomplete
 export mov=$media/movies-misc
+export mov=$media/movies
 export movc=$media/movies-classics
 export tv=$media/tv-freeform
+export tv=$media/tv
 export tvo=$media/tv-organized
 
 # Alias to quickly navigate folders

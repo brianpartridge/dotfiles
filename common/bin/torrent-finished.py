@@ -20,8 +20,11 @@ import tweet
 # Configuration
 MEDIA_ROOT = "/Volumes/DroboFS/tdb113070198/1/Public/media"
 MEDIA_ROOT = "/Volumes/Public/media"
+MEDIA_ROOT = "/Users/theater/Media"
 TV_DIRECTORY = os.path.join(MEDIA_ROOT, "tv-freeform")
+TV_DIRECTORY = os.path.join(MEDIA_ROOT, "tv")
 MOVIE_DIRECTORY = os.path.join(MEDIA_ROOT, "movies-misc")
+MOVIE_DIRECTORY = os.path.join(MEDIA_ROOT, "movies")
 LOGFILE = "~/logs/torrent-finished.log"
 LOGLEVEL = logging.DEBUG
 FILE_LOGLEVEL = logging.INFO
