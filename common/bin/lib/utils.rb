@@ -64,3 +64,7 @@ def fatal(message)
   abort '💔  ' + message
 end
 
+def bail(message)
+  info(message)
+end
+
