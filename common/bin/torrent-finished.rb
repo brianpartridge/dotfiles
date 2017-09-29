@@ -79,7 +79,17 @@ class File
   end
 end
 
+class Repro
+  def self.cmd
+    environment = ENV.keys.select { |k| k.start_with? 'TR_' }.sort.map { |k| "#{k}=#{ENV[k]}" }.join(' ')
+    script = File.expand_path(__FILE__)
+    "/usr/bin/env #{environment} ruby #{script}"
+  end
+end
+
 if __FILE__ == $0
+  info "Retry CMD: #{Repro.cmd}"
+
   torrent = Torrent.from_env
   bail "No torrent found" if torrent.nil?
 
