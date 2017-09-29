@@ -2,6 +2,8 @@
 #encoding : utf-8
 
 require_relative 'lib/episode_id'
+require 'fileutils'
+require 'logger'
 require_relative 'lib/movie_id'
 require_relative 'lib/tweet'
 require 'uri'
@@ -13,6 +15,8 @@ TV_DIRECTORY = File.join(MEDIA_ROOT, "tv")
 MOVIE_DIRECTORY = File.join(MEDIA_ROOT, "movies")
 
 # DO NOT MODIFY BELOW THIS LINE #
+
+$logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 1024000)
 
 class Torrent
   attr_reader :name, :hash, :directory
@@ -33,7 +37,7 @@ class Torrent
   def files
     download = File.join(@directory, @name)
     if File.directory?(download)
-      Dir.entries(download).filter { |f| !f.start_with('.') }.map { |f| File.join(@directory, f) }
+      Dir.entries(download).select { |f| !f.start_with?('.') }.map { |f| File.join(download, f) }
     else
       [download]
     end
@@ -48,12 +52,14 @@ class Handler
   def run!
     media = @torrent.files.select { |f| File.valid_media_file?(f) }
     if media.empty?
-      info "No media files found for #{@torrent.name}"
+      $logger.info "No media files found for #{@torrent.name}"
     elsif media.count == 1
-      if EpisodeID.from_release(@torrent.name) != nil
-        info "Found single episode"
-      elsif MovieID.from_release(@torrent.name) != nil
-        info "Found movie"
+      if !EpisodeID.from_release(@torrent.name).nil?
+        $logger.info "Found single episode"
+        copy_file(media.first, TV_DIRECTORY)
+      elsif !MovieID.from_release(@torrent.name).nil?
+        $logger.info "Found movie"
+        copy_file(media.first, MOVIE_DIRECTORY)
       else
         error "Unsupported media #{media.first}"
       end
@@ -61,18 +67,24 @@ class Handler
       error "Too many media files #{media.count}, unable to determine primary file."
     end
   end
+
+  def copy_file(path, destination_directory)
+    $logger.info "Copying #{path} to #{destination_directory}"
+    FileUtils.copy(path, destination_directory)
+    $logger.info "Copy complete"
+  end
 end
 
 class File
-  def valid_media_file?(file_name_or_path)
-    file_name = File.basename(file_name)
+  def self.valid_media_file?(path)
+    file_name = File.basename(path)
     return false if file_name.nil?
-    return false unless File.file?(file_name)
+    return false unless File.file?(path)
 
     blacklist = ['sample']
-    return false if blacklist.reduce(false) { |term| file_name.include?(term) }
+    return false if blacklist.reduce(false) { |acc, term| acc || file_name.include?(term) }
 
-    valid_extension = ['.mkv', '.avi', '.mov']
+    valid_extensions = ['.mkv', '.avi', '.mov']
     return false unless valid_extensions.include?(File.extname(file_name))
 
     true
@@ -88,12 +100,11 @@ class Repro
 end
 
 if __FILE__ == $0
-  info "Retry CMD: #{Repro.cmd}"
+  $logger.info "STARTING: #{Repro.cmd}"
 
   torrent = Torrent.from_env
-  bail "No torrent found" if torrent.nil?
+  $logger.fatal "ABORTING: No torrent found" unless torrent
 
-  handler = Handler.new(torrent)
-  handler.run!
+  Handler.new(torrent).run!
 end
 
