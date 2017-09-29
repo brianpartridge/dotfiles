@@ -29,7 +29,7 @@ class Torrent
   def self.from_env
     name = ENV['TR_TORRENT_NAME']
     return nil if name.nil? || name.empty? 
-    dir = ENV['TR_TORRENT_DIRECTORY']
+    dir = ENV['TR_TORRENT_DIR']
     return nil if dir.nil? || dir.empty?
     Torrent.new(name, dir)
   end
@@ -93,7 +93,7 @@ end
 
 class Repro
   def self.cmd
-    environment = ENV.keys.select { |k| k.start_with? 'TR_' }.sort.map { |k| "#{k}=#{ENV[k]}" }.join(' ')
+    environment = ENV.keys.select { |k| k.start_with? 'TR_TORRENT_' }.sort.map { |k| "#{k}=\"#{ENV[k]}\"" }.join(' ')
     script = File.expand_path(__FILE__)
     "/usr/bin/env #{environment} ruby #{script}"
   end
