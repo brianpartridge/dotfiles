@@ -46,9 +46,11 @@ class SeriesProcessor
   end
   
   def episodes_for_series_in_feed(series_dict, feed_name)
-    keywords = series_dict['keywords'].split(' ')
+    keywords = series_dict['keywords'].split(' ').map(&:downcase)
+    blacklist = series_dict['blacklist'].to_s.split(' ').map(&:downcase)
     @feed_cache.items_for_feed(feed_name)
-      .select { |i| keywords.map(&:downcase).reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
+      .select { |i| keywords.reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
+      .select { |i| blacklist.reduce(true) { |memo, k| memo && !i.title.downcase.include?(k) } }
       .map { |i| FeedEpisode.from_feed_item(i) }
       .reject { |i| i.nil? }
   end
