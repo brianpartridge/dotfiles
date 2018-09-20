@@ -18,7 +18,15 @@ class FeedCache
       @cache[feed_name] = []
     else
       url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
-      feed = RSS::Parser.parse(open(url).read)
+      feed = nil
+      begin
+        fd = open(url)
+        data = fd.read
+        feed = RSS::Parser.parse(data)
+      rescue Exception => e
+        error "#{e.message} : #{e.backtrace.inspect}"
+        fatal "Unable to fetch #{feed_name} : #{e.message}"
+      end
       @cache[feed_name] = feed.nil? ? [] : feed.items
       info2 "Loaded #{@cache[feed_name].count} items for #{feed_name}"
       #feed.items.each { |i| debug "Item: #{i.title}" }
