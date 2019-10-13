@@ -16,7 +16,27 @@ MOVIE_DIRECTORY = File.join(MEDIA_ROOT, "movies")
 
 # DO NOT MODIFY BELOW THIS LINE #
 
-$logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 1024000)
+$logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 1024)
+
+def info(msg)
+    puts msg
+    $logger.info msg
+end
+
+def warn(msg)
+    puts msg
+    $logger.warn msg
+end
+
+def error(msg)
+    puts msg
+    $logger.error msg
+end
+
+def fatal(msg)
+    puts msg
+    $logger.fatal msg
+end
 
 class Torrent
   attr_reader :name, :hash, :directory
@@ -54,17 +74,17 @@ class Handler
     tweet "SUCCESS:Download #{name}"
     media = @torrent.files.select { |f| File.valid_media_file?(f) }
     if media.empty?
-      $logger.info "No media files found for #{name}"
+      info "No media files found for #{name}"
       tweet "WARNING:No Media - #{name}"
     elsif media.count == 1
       path = media.first
       filename = File.basename(path)
       if !EpisodeID.from_release(name).nil?
-        $logger.info "Found single episode"
+        info "Found single episode"
         copy_file(path, TV_DIRECTORY)
         tweet "SUCCESS:TV Show - #{filename}"
       elsif !MovieID.from_release(name).nil?
-        $logger.info "Found movie"
+        info "Found movie"
         link_file(path, MOVIE_DIRECTORY)
         tweet "SUCCESS:Movie - #{filename}"
       else
@@ -78,17 +98,17 @@ class Handler
   end
 
   def copy_file(path, destination_directory)
-    $logger.info "Copying #{path} to #{destination_directory}"
+    info "Copying #{path} to #{destination_directory}"
     FileUtils.copy(path, destination_directory)
-    $logger.info "Copy complete"
+    info "Copy complete"
   end
 
   def link_file(path, destination_directory)
     filename = File.split(path).last
     destination_path = File.join(destination_directory, filename)
-    $logger.info "Symlinking  #{path} to #{destination_path}"
+    info "Symlinking  #{path} to #{destination_path}"
     FileUtils.ln_s(path, destination_path)
-    $logger.info "Symlinking complete"
+    info "Symlinking complete"
   end
 end
 
@@ -117,10 +137,10 @@ class Repro
 end
 
 if __FILE__ == $0
-  $logger.info "STARTING: #{Repro.cmd}"
+  info "STARTING: #{Repro.cmd}"
 
   torrent = Torrent.from_env
-  $logger.fatal "ABORTING: No torrent found" unless torrent
+  fatal "ABORTING: No torrent found" unless torrent
 
   Handler.new(torrent).run!
 end
