@@ -50,21 +50,30 @@ class Handler
   end
 
   def run!
+    name = @torrent.name
+    tweet "SUCCESS:Download #{name}"
     media = @torrent.files.select { |f| File.valid_media_file?(f) }
     if media.empty?
-      $logger.info "No media files found for #{@torrent.name}"
+      $logger.info "No media files found for #{name}"
+      tweet "WARNING:No Media - #{name}"
     elsif media.count == 1
-      if !EpisodeID.from_release(@torrent.name).nil?
+      path = media.first
+      filename = File.basename(path)
+      if !EpisodeID.from_release(name).nil?
         $logger.info "Found single episode"
-        copy_file(media.first, TV_DIRECTORY)
-      elsif !MovieID.from_release(@torrent.name).nil?
+        copy_file(path, TV_DIRECTORY)
+        tweet "SUCCESS:TV Show - #{filename}"
+      elsif !MovieID.from_release(name).nil?
         $logger.info "Found movie"
-        link_file(media.first, MOVIE_DIRECTORY)
+        link_file(path, MOVIE_DIRECTORY)
+        tweet "SUCCESS:Movie - #{filename}"
       else
-        error "Unsupported media #{media.first}"
+        error "Unsupported media #{path}"
+        tweet "WARNING:Unknown Media - #{filename}"
       end
     else
       error "Too many media files #{media.count}, unable to determine primary file."
+      tweet "WARNING:Multiple Media Files - #{name}"
     end
   end
 
