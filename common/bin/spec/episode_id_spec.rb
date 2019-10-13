@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'episode_id'
 require 'rspec'
 
@@ -90,7 +92,7 @@ describe 'EpisodeID' do
       expect(EpisodeID.from_s('PartTwo')).to eq(nil)
     end
   end
-  
+
   describe 'from_release' do
     it 'parses' do
       expect(EpisodeID.from_release('Series.S01E01.720p')).to eq(e11)
@@ -106,4 +108,3 @@ describe 'EpisodeID' do
     end
   end
 end
-

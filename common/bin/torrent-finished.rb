@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-#encoding : utf-8
+# frozen_string_literal: true
 
 require_relative 'lib/episode_id'
 require 'fileutils'
@@ -10,32 +10,32 @@ require 'uri'
 require_relative 'lib/utils'
 
 # Configuration
-MEDIA_ROOT = "/Users/theater/Media"
-TV_DIRECTORY = File.join(MEDIA_ROOT, "tv")
-MOVIE_DIRECTORY = File.join(MEDIA_ROOT, "movies")
+MEDIA_ROOT = '/Users/theater/Media'
+TV_DIRECTORY = File.join(MEDIA_ROOT, 'tv')
+MOVIE_DIRECTORY = File.join(MEDIA_ROOT, 'movies')
 
 # DO NOT MODIFY BELOW THIS LINE #
 
 $logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 1024)
 
 def info(msg)
-    puts msg
-    $logger.info msg
+  puts msg
+  $logger.info msg
 end
 
 def warn(msg)
-    puts msg
-    $logger.warn msg
+  puts msg
+  $logger.warn msg
 end
 
 def error(msg)
-    puts msg
-    $logger.error msg
+  puts msg
+  $logger.error msg
 end
 
 def fatal(msg)
-    puts msg
-    $logger.fatal msg
+  puts msg
+  $logger.fatal msg
 end
 
 class Torrent
@@ -48,16 +48,18 @@ class Torrent
 
   def self.from_env
     name = ENV['TR_TORRENT_NAME']
-    return nil if name.nil? || name.empty? 
+    return nil if name.nil? || name.empty?
+
     dir = ENV['TR_TORRENT_DIR']
     return nil if dir.nil? || dir.empty?
+
     Torrent.new(name, dir)
   end
 
   def files
     download = File.join(@directory, @name)
     if File.directory?(download)
-      Dir.entries(download).select { |f| !f.start_with?('.') }.map { |f| File.join(download, f) }
+      Dir.entries(download).reject { |f| f.start_with?('.') }.map { |f| File.join(download, f) }
     else
       [download]
     end
@@ -80,11 +82,11 @@ class Handler
       path = media.first
       filename = File.basename(path)
       if !EpisodeID.from_release(name).nil?
-        info "Found single episode"
+        info 'Found single episode'
         copy_file(path, TV_DIRECTORY)
         tweet "SUCCESS:TV Show - #{filename}"
       elsif !MovieID.from_release(name).nil?
-        info "Found movie"
+        info 'Found movie'
         link_file(path, MOVIE_DIRECTORY)
         tweet "SUCCESS:Movie - #{filename}"
       else
@@ -100,7 +102,7 @@ class Handler
   def copy_file(path, destination_directory)
     info "Copying #{path} to #{destination_directory}"
     FileUtils.copy(path, destination_directory)
-    info "Copy complete"
+    info 'Copy complete'
   end
 
   def link_file(path, destination_directory)
@@ -108,7 +110,7 @@ class Handler
     destination_path = File.join(destination_directory, filename)
     info "Symlinking  #{path} to #{destination_path}"
     FileUtils.ln_s(path, destination_path)
-    info "Symlinking complete"
+    info 'Symlinking complete'
   end
 end
 
@@ -119,7 +121,9 @@ class File
     return false unless File.file?(path)
 
     blacklist = ['sample']
-    return false if blacklist.reduce(false) { |acc, term| acc || file_name.include?(term) }
+    if blacklist.reduce(false) { |acc, term| acc || file_name.include?(term) }
+      return false
+    end
 
     valid_extensions = ['.mkv', '.avi', '.mov']
     return false unless valid_extensions.include?(File.extname(file_name))
@@ -136,12 +140,11 @@ class Repro
   end
 end
 
-if __FILE__ == $0
+if $PROGRAM_NAME == __FILE__
   info "STARTING: #{Repro.cmd}"
 
   torrent = Torrent.from_env
-  fatal "ABORTING: No torrent found" unless torrent
+  fatal 'ABORTING: No torrent found' unless torrent
 
   Handler.new(torrent).run!
 end
-

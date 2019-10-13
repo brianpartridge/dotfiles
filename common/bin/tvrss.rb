@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
 require_relative 'lib/episode_id'
 require_relative 'lib/feed_cache'
@@ -8,7 +9,7 @@ require_relative 'lib/tweet'
 require 'uri'
 require_relative 'lib/utils'
 
-$conf_filename = "tvrss.json"
+$conf_filename = 'tvrss.json'
 $dl_dir = '~/Dropbox/torrents/'
 
 def load_config
@@ -19,7 +20,7 @@ def save_config(hash)
   save_json_config($conf_filename, hash)
 end
 
-# Identifies episodes in the feed cache for a given series. 
+# Identifies episodes in the feed cache for a given series.
 class SeriesProcessor
   def initialize(feed_cache)
     @feed_cache = feed_cache
@@ -34,25 +35,25 @@ class SeriesProcessor
   def candidate_episodes(series_dict)
     last_seen_ep = ConfigEpisode.new(series_dict)
     series_episodes(series_dict).select { |e| e.id > last_seen_ep.id }
-  end 
- 
+  end
+
   # Private
 
   def episodes_for_series(series_dict)
     eps = episodes_for_series_in_feed(series_dict, series_dict['feed'])
     return eps if eps.count > 0
-    
-    return episodes_for_series_in_feed(series_dict, series_dict['fallback'])
+
+    episodes_for_series_in_feed(series_dict, series_dict['fallback'])
   end
-  
+
   def episodes_for_series_in_feed(series_dict, feed_name)
     keywords = series_dict['keywords'].split(' ').map(&:downcase)
     blacklist = series_dict['blacklist'].to_s.split(' ').map(&:downcase)
     @feed_cache.items_for_feed(feed_name)
-      .select { |i| keywords.reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
-      .select { |i| blacklist.reduce(true) { |memo, k| memo && !i.title.downcase.include?(k) } }
-      .map { |i| FeedEpisode.from_feed_item(i) }
-      .reject { |i| i.nil? }
+               .select { |i| keywords.reduce(true) { |memo, k| memo && i.title.downcase.include?(k) } }
+               .select { |i| blacklist.reduce(true) { |memo, k| memo && !i.title.downcase.include?(k) } }
+               .map { |i| FeedEpisode.from_feed_item(i) }
+               .reject(&:nil?)
   end
 end
 
@@ -68,6 +69,7 @@ class FeedEpisode
   def self.from_feed_item(feed_item)
     id = EpisodeID.from_release(feed_item.title)
     return nil unless id
+
     FeedEpisode.new(id, feed_item.title, feed_item.link)
   end
 end
@@ -89,7 +91,7 @@ class TVRSS
 
   def download_updates!
     @config['series'].each { |s| process_series(s) }
-    return @config
+    @config
   end
 
   def process_series(series_dict)
@@ -102,17 +104,19 @@ class TVRSS
 
   def fresh_eps_for_series(series_dict)
     last_seen = ConfigEpisode.new(series_dict)
-    info "Checking '#{series_dict['keywords']}' newer than #{last_seen.id.to_s}..."
+    info "Checking '#{series_dict['keywords']}' newer than #{last_seen.id}..."
 
     series_eps = @processor.series_episodes(series_dict)
     series_eps.each { |e| info2 "Match: #{e.title}" }
 
     candidate_eps = @processor.candidate_episodes(series_dict)
     candidate_eps.each { |e| info2 "Candidate: #{e.title}" }
-    
-    fresh_eps = candidate_eps.sort { |l, r| l.id <=> r.id }.uniq { |e| e.id }
-    info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{fresh_eps.count} new..." if series_eps.count > 0 || candidate_eps.count > 0
-         
+
+    fresh_eps = candidate_eps.sort { |l, r| l.id <=> r.id }.uniq(&:id)
+    if series_eps.count > 0 || candidate_eps.count > 0
+      info "Found #{series_eps.count} series matches, #{candidate_eps.count} candidates, #{fresh_eps.count} new..."
+    end
+
     fresh_eps
   end
 
@@ -132,7 +136,7 @@ def run!
   cache = FeedCache.new(config['feeds'])
   processor = SeriesProcessor.new(cache)
   new_config = TVRSS.new(config, processor).download_updates!
-  
+
   save_config(config) # unless config == new_config
   success 'Done'
 end
