@@ -6,5 +6,5 @@ export TR_TORRENT_HASH=abc
 export TR_TORRENT_ID=123
 export TR_TORRENT_NAME="test torrent"
 
-./torrent-finished.py
+./torrent-finished.rb
 
