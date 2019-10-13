@@ -10,7 +10,7 @@ require 'set'
 
 $conf_dir = '~/Dropbox/conf/'
 
-$logger = Logger.new(File.expand_path('~/logs/letterboxd-watchlist-to-wishlist.log'), 10, 1024000)
+$logger = Logger.new(File.expand_path('~/logs/letterboxd-watchlist-to-wishlist.log'), 10, 1024)
 
 def info(msg)
     puts msg
