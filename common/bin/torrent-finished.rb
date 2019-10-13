@@ -59,7 +59,7 @@ class Handler
         copy_file(media.first, TV_DIRECTORY)
       elsif !MovieID.from_release(@torrent.name).nil?
         $logger.info "Found movie"
-        copy_file(media.first, MOVIE_DIRECTORY)
+        link_file(media.first, MOVIE_DIRECTORY)
       else
         error "Unsupported media #{media.first}"
       end
@@ -72,6 +72,14 @@ class Handler
     $logger.info "Copying #{path} to #{destination_directory}"
     FileUtils.copy(path, destination_directory)
     $logger.info "Copy complete"
+  end
+
+  def link_file(path, destination_directory)
+    filename = File.split(path).last
+    destination_path = File.join(destination_directory, filename)
+    $logger.info "Symlinking  #{path} to #{destination_path}"
+    FileUtils.ln_s(path, destination_path)
+    $logger.info "Symlinking complete"
   end
 end
 
