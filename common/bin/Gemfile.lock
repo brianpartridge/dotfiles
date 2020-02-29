@@ -18,7 +18,7 @@ GEM
       method_source (~> 0.8.1)
       slop (~> 3.4)
     rainbow (3.0.0)
-    rake (10.4.2)
+    rake (12.3.3)
     rspec (3.4.0)
       rspec-core (~> 3.4.0)
       rspec-expectations (~> 3.4.0)
@@ -53,7 +53,7 @@ PLATFORMS
 DEPENDENCIES
   imdb_watchlist
   pry
-  rake (~> 10.0)
+  rake (~> 12.3)
   rspec (~> 3.0)
   rubocop (>= 0.24)
   webmock (~> 1.21.0)
