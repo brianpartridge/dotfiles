@@ -1,0 +1,35 @@
+alias o='open .'
+alias x='open -a `xcode-select --print-path`/../.. .'
+alias b='stash browse'
+
+alias gbm='git co master && git pull && git co -f && git co -'
+alias gcm='git co master'
+alias grc='git rebase --continue'
+alias gri='git rebase -i'
+alias grm='git rebase -i master'
+alias gra='git rebase --abort'
+alias mgm='git ls-files -mz | xargs -0 mate'
+alias stree='/Users/$USER/Applications/SourceTree.app/Contents/Resources/stree'
+
+# Identify the number of merged PRs, by author, for the past week.
+alias merges='git shortlog -sne --since="`date -v -1w +%Y-%m-%d`" --before="`date +%Y-%m-%d`" --merges'
+
+alias odd='open ~/Library/Developer/Xcode/DerivedData'
+alias cdd='cd ~/Library/Developer/Xcode/DerivedData'
+alias xsp='xcode-select -p'
+alias xss='sudo xcode-select -s'
+
+alias bpc='be pod check'
+alias bi='bundle install'
+alias bpi='be pod install'
+alias bpiru='be pod install --repo-update'
+alias bpo='be pod open'
+alias bumpprotos='bundle exec pod update $(grep "^  - .*Proto" Podfile.lock | perl -pe "s/  - (\S+).*/\1/")'
+
+alias create='./Scripts/CreateNewModule'
+alias dev='./Scripts/Develop'
+alias lint='./Scripts/Lint autocorrect && ./Scripts/Lint --quiet --strict'
+
+alias fuckssh='killall ssh-agent; eval "$(ssh-agent -s)" && ssh-add -K'
+
+alias sst='open vnc://theater@thoth.local'

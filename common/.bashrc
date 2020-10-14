@@ -17,6 +17,9 @@ YELLOW="\[\033[1;33m\]"
 WHITE="\[\033[1;37m\]"
 NO_COLOR="\[\033[0m\]"
 
+# rg (ripgrep) config
+export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
+
 # Conditionally load host-specifc extended profile settings
 EXTENDED_PROFILE=".bashrc_ex"
 if [ -e "$EXTENDED_PROFILE" ]; then
@@ -62,6 +65,7 @@ alias cd..='cd ..'
 alias grep='grep --color'
 alias env='env | sort'
 alias x='open -a /Applications/Xcode.app .'
+alias fixaudio='sudo launchctl stop com.apple.audio.coreaudiod && sudo launchctl start com.apple.audio.coreaudiod'
 
 ## Xcode
 # In-place remove trailing spaces and tabs in a file
@@ -111,3 +115,5 @@ alias reload-tvrss="launchctl unload ~/Library/LaunchAgents/com.multipleentendre
 alias check-tvrss="launchctl list | grep tvrss"
 alias tvrss-log="cat ~/logs/tvrss-job.log"
 alias clear-tvrss-log="rm ~/logs/tvrss-job.log"
+
+alias st="stree ."

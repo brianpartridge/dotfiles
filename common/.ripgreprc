@@ -1,0 +1,25 @@
+# Search hidden files and directories.
+--hidden
+
+# Follow symbolic links.
+--follow
+
+# Don't respect ignore files (.gitignore, etc.).
+--no-ignore
+
+# Exclude directories.
+--glob=!{.git,Pods,gen}
+
+# Don't print lines longer than this limit.
+--max-columns=10000
+
+# Sort by file path.
+--sort=path
+
+# Search podspecs
+--type-add
+pod:*.podspec
+
+# Search Podfiles
+--type-add
+pod:Podfile*
