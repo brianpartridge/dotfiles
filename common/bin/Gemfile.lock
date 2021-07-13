@@ -1,7 +1,8 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    addressable (2.4.0)
+    addressable (2.8.0)
+      public_suffix (>= 2.0.2, < 5.0)
     ast (2.4.0)
     coderay (1.1.0)
     crack (0.4.3)
@@ -17,6 +18,7 @@ GEM
       coderay (~> 1.1.0)
       method_source (~> 0.8.1)
       slop (~> 3.4)
+    public_suffix (4.0.6)
     rainbow (3.0.0)
     rake (10.4.2)
     rspec (3.4.0)
