@@ -27,7 +27,7 @@ alias bumpprotos='bundle exec pod update $(grep "^  - .*Proto" Podfile.lock | pe
 
 alias create='./Scripts/CreateNewModule'
 alias dev='./Scripts/Develop'
-alias lint='./Scripts/Lint autocorrect && ./Scripts/Lint --quiet --strict'
+alias lint='./Scripts/Lint --fix --quiet --strict && ./Scripts/Lint --quiet --strict'
 
 alias fuckssh='killall ssh-agent; eval "$(ssh-agent -s)" && ssh-add -K'
 
