@@ -5,6 +5,7 @@ require_relative 'lib/episode_id'
 require 'fileutils'
 require 'logger'
 require_relative 'lib/movie_id'
+require 'set'
 require_relative 'lib/tweet'
 require 'uri'
 require_relative 'lib/utils'
@@ -75,27 +76,51 @@ class Handler
     name = @torrent.name
     tweet "SUCCESS:Download #{name}"
     media = @torrent.files.select { |f| File.valid_media_file?(f) }
-    if media.empty?
+    rars = @torrent.files.select { |f| File.extname(f) == ".rar" }
+    handled = false
+    if media.empty? and rars.empty?
       info "No media files found for #{name}"
       tweet "WARNING:No Media - #{name}"
+      handled = true
     elsif media.count == 1
       path = media.first
-      filename = File.basename(path)
-      if !EpisodeID.from_release(name).nil?
-        info 'Found single episode'
-        copy_file(path, TV_DIRECTORY)
-        tweet "SUCCESS:TV Show - #{filename}"
-      elsif !MovieID.from_release(name).nil?
-        info 'Found movie'
-        link_file(path, MOVIE_DIRECTORY)
-        tweet "SUCCESS:Movie - #{filename}"
-      else
-        error "Unsupported media #{path}"
-        tweet "WARNING:Unknown Media - #{filename}"
+      handle_media_file(path, name)
+      handled = true
+    elsif rars.count == 1
+      path = rars.first
+      directory = File.dirname(path)
+      info "Exracting #{path}"
+      before = Set.new(@torrent.files)
+      `cd #{directory} && unrar x #{path}`
+      after = Set.new(@torrent.files)
+      new = after - before
+      new_media = new.select { |f| File.valid_media_file?(f) }
+      if new_media.count == 1
+        media_file_path = new_media.first
+        handle_media_file(media_file_path, name)
+        handled = true
       end
-    else
-      error "Too many media files #{media.count}, unable to determine primary file."
+    end
+
+    if !handled
+      error "Too many media or rar files #{media.count}, unable to determine primary file."
       tweet "WARNING:Multiple Media Files - #{name}"
+    end
+  end
+
+  def handle_media_file(path, name)
+    filename = File.basename(path)
+    if !EpisodeID.from_release(name).nil?
+      info 'Found single episode'
+      copy_file(path, TV_DIRECTORY)
+      tweet "SUCCESS:TV Show - #{filename}"
+    elsif !MovieID.from_release(name).nil?
+      info 'Found movie'
+      link_file(path, MOVIE_DIRECTORY)
+      tweet "SUCCESS:Movie - #{filename}"
+    else
+      error "Unsupported media #{path}"
+      tweet "WARNING:Unknown Media - #{filename}"
     end
   end
 
