@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'net/https'
 require 'rss'
 require 'uri'
 require_relative 'utils'
@@ -22,7 +23,7 @@ class FeedCache
       url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
       feed = nil
       begin
-        fd = open(url)
+        fd = open(url, {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE})
         data = fd.read
         feed = RSS::Parser.parse(data)
       rescue Exception => e

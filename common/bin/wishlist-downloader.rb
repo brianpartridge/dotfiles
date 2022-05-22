@@ -1,6 +1,7 @@
 #!/usr/bin/ruby
 # frozen_string_literal: true
 
+require 'openssl'
 require 'rss'
 require_relative 'lib/tweet'
 
@@ -26,7 +27,7 @@ def rss_url(internal_only)
 end
 
 def load_available_wishlist_items(internal_only = true)
-  RSS::Parser.parse(open(rss_url(internal_only)).read).items
+  RSS::Parser.parse(open(rss_url(internal_only),  {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}).read).items
 end
 
 # Only download items that are 720p, and remove duplicates to only download unique items.
@@ -38,7 +39,7 @@ def download_item(item)
   puts "Downloading #{item.title}"
   tweet "START:Download - #{item.title}"
   open(dl_item_path(item), 'wb') do |f|
-    f << open(item.link).read
+    f << open(item.link,  {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}).read
   end
 end
 
