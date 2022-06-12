@@ -146,7 +146,7 @@ class File
     return false unless File.file?(path)
 
     blacklist = ['sample']
-    if blacklist.reduce(false) { |acc, term| acc || file_name.include?(term) }
+    if blacklist.reduce(false) { |acc, term| acc || file_name.downcase.include?(term) }
       return false
     end
 
