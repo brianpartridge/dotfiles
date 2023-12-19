@@ -27,8 +27,46 @@ alias bumpprotos='bundle exec pod update $(grep "^  - .*Proto" Podfile.lock | pe
 
 alias create='./Scripts/CreateNewModule'
 alias dev='./Scripts/Develop'
-alias lint='./Scripts/Lint --fix --quiet --strict && ./Scripts/Lint --quiet --strict'
+alias lint='./cash lint --fix && ./cash lint'
+alias oldlint='./Scripts/Lint --fix --quiet --strict && ./Scripts/Lint --quiet --strict'
 
 alias fuckssh='killall ssh-agent; eval "$(ssh-agent -s)" && ssh-add -K'
 
 alias sst='open vnc://theater@thoth.local'
+
+# For a source file path in cash-ios, return the name of the module.
+# ex: Code/Features/ClusterName/ModuleName/Sources/File.swift -> ModuleName
+alias modulename="sed -r 's/(.*)\/(Sources|UnitTests|SnapshotTests|DevApp)\/.*/\1/g' | xargs basename"
+
+# Bazel with a lower minimum disk space
+alias b="CASH_BAZEL_BUILD_MIN_AVAILABLE_DISK_SPACE_BYTES=40000000000 bazel"
+
+alias bb="b build"
+alias br="b run"
+alias bt="b test"
+
+# Build the world
+alias bbw="bb //..."
+alias bbc="bb //Code/Apps/CashApp"
+
+# Run CashApp
+alias brc="bb run //Code/Apps/CashApp"
+
+# # Get the path to a module. Module name is expected as a parameter.
+# module_path() {
+#    spec = `find . -name $1.podspec`
+#    path = `dirname $spec | tr "." "/"`
+#    echo "$path"
+# }
+#
+# # Get the bazel path to a module. Module path is expected as a parameter.
+# module_bazel_path() {
+#    bazel_path = `echo $1 | tr "." "/"`
+#    echo "$bazel_path"
+# }
+#
+# # Build a module. Module name is expected to follow this command
+# bbm() {
+#    bb `module_bazel_path $1`
+# }
+# alias bbm=
