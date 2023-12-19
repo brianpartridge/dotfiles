@@ -18,7 +18,7 @@ GEM
       method_source (~> 1.0)
     public_suffix (4.0.6)
     rainbow (3.1.1)
-    rake (10.5.0)
+    rake (12.3.3)
     regexp_parser (2.2.1)
     rexml (3.2.5)
     rspec (3.11.0)
@@ -57,7 +57,7 @@ PLATFORMS
 DEPENDENCIES
   imdb_watchlist
   pry
-  rake (~> 10.0)
+  rake (~> 12.3)
   rspec (~> 3.0)
   rubocop (>= 0.24)
   webmock (~> 1.21.0)
