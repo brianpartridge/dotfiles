@@ -60,10 +60,11 @@ class LetterboxdWatchlist
     end
 
     def url
-      URI('https://letterboxd.com' + slug)
+      URI('https://letterboxd.com/film/' + slug)
     end
 
     def fetch_id
+      info url
       film_page = Nokogiri::HTML(open(url, {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}))
       imdb_tag = film_page.css('a[data-track-action=IMDb]').first
       return if imdb_tag.nil?

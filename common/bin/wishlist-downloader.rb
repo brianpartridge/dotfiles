@@ -1,12 +1,40 @@
 #!/usr/bin/ruby
 # frozen_string_literal: true
 
+require 'fileutils'
+require 'logger'
 require 'openssl'
 require 'rss'
 require_relative 'lib/tweet'
 
+# Configuration
+
 $conf_dir = '~/Dropbox/conf/'
 $dl_dir = '~/Dropbox/torrents/'
+
+# DO NOT MODIFY BELOW THIS LINE #
+
+$logger = Logger.new(File.expand_path('~/logs/wishlist-downloader.log'), 10, 1024)
+
+def info(msg)
+  puts msg
+  $logger.info msg
+end
+
+def warn(msg)
+  puts msg
+  $logger.warn msg
+end
+
+def error(msg)
+  puts msg
+  $logger.error msg
+end
+
+def fatal(msg)
+  puts msg
+  $logger.fatal msg
+end
 
 def conf_file(filename)
   File.expand_path($conf_dir + filename)
@@ -36,7 +64,7 @@ def filter_items(items)
 end
 
 def download_item(item)
-  puts "Downloading #{item.title}"
+  info "Downloading #{item.title}"
   tweet "START:Download - #{item.title}"
   open(dl_item_path(item), 'wb') do |f|
     f << open(item.link,  {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}).read
@@ -45,13 +73,13 @@ end
 
 def run!
   all_items = load_available_wishlist_items
-  puts "#{all_items.count} available on wishlist"
+  info "#{all_items.count} available on wishlist"
 
   items = filter_items(all_items)
-  puts "#{items.count} queued for download"
+  info "#{items.count} queued for download"
 
   items.each { |i| download_item(i) }
-  puts 'Done'
+  info 'Done'
 end
 
 run!

@@ -9,7 +9,8 @@ class String
 end
 
 def tweet(message)
-  return if `which t`.empty?
-
-  `t update "#{message.truncate(MAX_LEN)}"`
+  # dont post to twitter because i dont use it anymore  
+  puts "Not tweeting: #{message.truncate(MAX_LEN)}"
+  # return if `which t`.empty?
+  #`t update "#{message.truncate(MAX_LEN)}"`
 end
