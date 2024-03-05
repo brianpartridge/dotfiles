@@ -9,7 +9,12 @@ GEM
       rexml
     diff-lcs (1.5.0)
     imdb_watchlist (0.0.1)
+    jaro_winkler (1.5.6)
     method_source (1.0.0)
+    mini_portile2 (2.8.5)
+    nokogiri (1.15.5)
+      mini_portile2 (~> 2.8.2)
+      racc (~> 1.4)
     parallel (1.21.0)
     parser (3.1.0.0)
       ast (~> 2.4.1)
@@ -17,6 +22,7 @@ GEM
       coderay (~> 1.1)
       method_source (~> 1.0)
     public_suffix (4.0.6)
+    racc (1.7.3)
     rainbow (3.1.1)
     rake (12.3.3)
     regexp_parser (2.2.1)
@@ -56,6 +62,8 @@ PLATFORMS
 
 DEPENDENCIES
   imdb_watchlist
+  jaro_winkler
+  nokogiri (~> 1.10)
   pry
   rake (~> 12.3)
   rspec (~> 3.0)
