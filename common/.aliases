@@ -2,14 +2,13 @@ alias o='open .'
 alias x='open -a `xcode-select --print-path`/../.. .'
 alias b='stash browse'
 
-alias gbm='git co master && git pull && git co -f && git co -'
-alias gcm='git co master'
+alias gbm='git co main && git pull && git co -f && git co -'
+alias gcm='git co main'
 alias grc='git rebase --continue'
 alias gri='git rebase -i'
-alias grm='git rebase -i master'
+alias grm='git rebase -i main'
 alias gra='git rebase --abort'
 alias mgm='git ls-files -mz | xargs -0 mate'
-alias stree='/Users/$USER/Applications/SourceTree.app/Contents/Resources/stree'
 
 # Identify the number of merged PRs, by author, for the past week.
 alias merges='git shortlog -sne --since="`date -v -1w +%Y-%m-%d`" --before="`date +%Y-%m-%d`" --merges'

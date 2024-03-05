@@ -4,3 +4,5 @@ bindkey '\e[B' history-beginning-search-forward
 
 # rg (ripgrep) config
 export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
+
+RPROMPT='%D{%m/%f/%y}|%D{%L:%M:%S}'

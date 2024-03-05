@@ -8,7 +8,7 @@
 --no-ignore
 
 # Exclude directories.
---glob=!{.git,Pods,gen}
+--glob=!{.git,Pods,gen,build}
 
 # Don't print lines longer than this limit.
 --max-columns=10000
