@@ -41,6 +41,7 @@ class LetterboxdWatchlist
     @items = watchlist_page
              .css('div.poster')
              .map { |p| p['data-film-slug'] }
+             .reject { |s| s.nil? || s.empty? }
              .map { |s| Item.new(s) }
   end
 
