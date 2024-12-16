@@ -73,3 +73,6 @@ alias brc="bb run //Code/Apps/CashApp"
 # }
 # alias bbm=
 
+# Pipe a lines of numbers into this
+alias add="awk '{s+=\$1} END {print s}'"
+
