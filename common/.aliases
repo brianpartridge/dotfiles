@@ -25,6 +25,8 @@ alias bpiru='be pod install --repo-update'
 alias bpo='be pod open'
 alias bumpprotos='bundle exec pod update $(grep "^  - .*Proto" Podfile.lock | perl -pe "s/  - (\S+).*/\1/")'
 
+alias fixpodfile='git checkout --ours -- Podfile.lock && bpiru'
+
 alias create='./Scripts/CreateNewModule'
 alias dev='./Scripts/Develop'
 alias lint='./cash lint --fix && ./cash lint'
