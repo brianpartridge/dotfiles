@@ -22,3 +22,61 @@ function clean_bazel_sims() {
   done
 }
 
+# Bazel label Foo is actually a `ios_build_test` rule rather than the module Foo. Instead you want "Foo.lib". This does some sanitization of the input so it is easier to work with and callers do not need to remember the ".lib" suffix.
+function bazel_sanitize_lib() {
+    if [[ $1 != *Test && $1 != *DevApp ]]; then
+        if [[ $1 != *.lib ]]; then
+            echo "${1}.lib"
+        else
+            echo "$1"
+        fi
+    else
+        echo "$1"
+    fi
+}
+
+function lookup {
+  if [[ "$1" == "//"* ]]; then
+    echo $1
+  else
+    name=$(bazel_sanitize_lib $1)
+    bazel query "filter(:$name$, //...)" --output=label
+  fi
+}
+
+function graph {
+  label=$(lookup $1)
+  depth="$2"
+  query="deps($label, $depth)"
+  if [[ -z "$depth" ]]; then
+    query="deps($label)"
+  fi
+  timestamp=$(date +'%Y%m%d.%H%M%S')
+  name=$(basename $1)
+  tmpfile="$TMPDIR/$timestamp-graph-$name.svg"
+  # Trim off the prefix for non-local labels
+  # Extract the module name, dropping the path and an suffix
+  bazel query --output graph --notool_deps "kind('(swift_library|.*_test\b)', $query)" | \
+    perl -pe 's/\@swiftpkg\w+//g' | \
+      perl -pe 's/\/\/[\w\/]*:([\w-]+)\b(\.\w*)?/$1/g' | \
+        dot -Tsvg > $tmpfile && \
+          open $tmpfile
+}
+
+function rgraph {
+  label=$(lookup $1)
+  local depth="$2"
+  if [[ -z "$depth" ]]; then
+    depth=1
+  fi
+  timestamp=$(date +'%Y%m%d.%H%M%S')
+  name=$(basename $1)
+  tmpfile="$TMPDIR/$timestamp-graph-$name.svg"
+  # Trim off the prefix for non-local labels
+  # Extract the module name, dropping the path and an suffix
+  bazel query --output graph --notool_deps "kind('(swift_library|.*_test\b)', rdeps(//..., $label, $depth))" | \
+    perl -pe 's/\@swiftpkg\w+//g' | \
+      perl -pe 's/\/\/[\w\/]*:([\w-]+)\b(\.\w*)?/$1/g' | \
+        dot -Tsvg > $tmpfile && \
+          open $tmpfile
+}
