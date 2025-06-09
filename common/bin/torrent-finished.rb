@@ -17,7 +17,7 @@ MOVIE_DIRECTORY = File.join(MEDIA_ROOT, 'movies')
 
 # DO NOT MODIFY BELOW THIS LINE #
 
-$logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 1024)
+$logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 10240)
 
 def info(msg)
   puts msg
@@ -95,6 +95,7 @@ class Handler
       after = Set.new(@torrent.files)
       new = after - before
       new_media = new.select { |f| File.valid_media_file?(f) }
+      info "New media #{new_media}"
       if new_media.count == 1
         media_file_path = new_media.first
         handle_media_file(media_file_path, name)
