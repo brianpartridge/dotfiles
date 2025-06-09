@@ -20,8 +20,9 @@ class MovieID
   end
 
   def self.from_release(name)
-    sanitized_name = name.gsub(/h.264/i, '').gsub(/720p/i, '').gsub(/1080p/i, '')
-    match_data = sanitized_name.match(/(?<title>.+)[\._ \-](?<year>(19|20)\d{2})[\._ \-]/)
+    sanitized_name = name.gsub(/h.264/i, '').gsub(/720p/i, '').gsub(/1080p/i, '').gsub(/2160p/i, '')
+    # <title><separator><optional-parens><4-digit-year><optional-parens><separator>
+    match_data = sanitized_name.match(/(?<title>.+)[\._ \-]\(?(?<year>(19|20)\d{2})\)?[\._ \-]/)
     return nil unless match_data
 
     sanitized_title = match_data['title'].gsub(/[\._ ]/i, ' ')
