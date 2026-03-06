@@ -44,7 +44,7 @@ function lookup {
   fi
 }
 
-function graph {
+function dotgraph {
   label=$(lookup $1)
   depth="$2"
   query="deps($label, $depth)"
@@ -53,17 +53,39 @@ function graph {
   fi
   timestamp=$(date +'%Y%m%d.%H%M%S')
   name=$(basename $1)
-  tmpfile="$TMPDIR/$timestamp-graph-$name.svg"
+  tmpfile="$TMPDIR/$timestamp-graph-$name.dot"
   # Trim off the prefix for non-local labels
   # Extract the module name, dropping the path and an suffix
   bazel query --output graph --notool_deps "kind('(swift_library|.*_test\b)', $query)" | \
     perl -pe 's/\@swiftpkg\w+//g' | \
       perl -pe 's/\/\/[\w\/]*:([\w-]+)\b(\.\w*)?/$1/g' | \
-        dot -Tsvg > $tmpfile && \
-          open $tmpfile
+        dot -Tdot > $tmpfile
+  echo $tmpfile
 }
 
-function rgraph {
+function graph {
+  dotfile=$(dotgraph $1 $2)
+  echo $dotfile
+  svgfile="$dotfile.svg"
+  dot -Tsvg $dotfile > $svgfile
+  echo $svgfile
+  open $svgfile
+}
+
+function deps {
+  label=$(lookup $1)
+  local depth="$2"
+  if [[ -z "$depth" ]]; then
+    depth=1
+  fi
+  # Trim off the prefix for non-local labels
+  # Extract the module name, dropping the path and an suffix
+  bazel query "kind('(swift_library|.*_test\b)', $query)" | \
+    perl -pe 's/\@swiftpkg\w+//g' | \
+      perl -pe 's/\/\/[\w\/]*:([\w-]+)\b(\.\w*)?/$1/g'
+}
+
+function rdotgraph {
   label=$(lookup $1)
   local depth="$2"
   if [[ -z "$depth" ]]; then
@@ -71,12 +93,34 @@ function rgraph {
   fi
   timestamp=$(date +'%Y%m%d.%H%M%S')
   name=$(basename $1)
-  tmpfile="$TMPDIR/$timestamp-graph-$name.svg"
+  tmpfile="$TMPDIR/$timestamp-graph-$name.dot"
   # Trim off the prefix for non-local labels
   # Extract the module name, dropping the path and an suffix
   bazel query --output graph --notool_deps "kind('(swift_library|.*_test\b)', rdeps(//..., $label, $depth))" | \
     perl -pe 's/\@swiftpkg\w+//g' | \
       perl -pe 's/\/\/[\w\/]*:([\w-]+)\b(\.\w*)?/$1/g' | \
-        dot -Tsvg > $tmpfile && \
-          open $tmpfile
+        dot -Tdot > $tmpfile
+  echo $tmpfile
+}
+
+function rgraph {
+  dotfile=$(rdotgraph $1 $2)
+  echo $dotfile
+  svgfile="$dotfile.svg"
+  dot -Tsvg $dotfile > $svgfile
+  echo $svgfile
+  open $svgfile
+}
+
+function rdeps {
+  label=$(lookup $1)
+  local depth="$2"
+  if [[ -z "$depth" ]]; then
+    depth=1
+  fi
+  # Trim off the prefix for non-local labels
+  # Extract the module name, dropping the path and an suffix
+  bazel query "kind('(swift_library|.*_test\b)', rdeps(//..., $label, $depth))" | \
+    perl -pe 's/\@swiftpkg\w+//g' | \
+      perl -pe 's/\/\/[\w\/]*:([\w-]+)\b(\.\w*)?/$1/g'
 }
