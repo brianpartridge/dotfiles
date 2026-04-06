@@ -27,12 +27,12 @@ set ignorecase
 
 filetype plugin on
 
-call plug#begin()
-
-Plug 'fatih/vim-go'
-Plug 'wincent/command-t'
-
-call plug#end()
+" call plug#begin()
+" 
+" Plug 'fatih/vim-go'
+" Plug 'wincent/command-t'
+" 
+" call plug#end()
 
 let mapleader=","
 
