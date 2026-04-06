@@ -30,12 +30,6 @@ For example, each location can have a .bash\_profile\_ex file which will be sour
     
 - When a change is made in one environment, push it to the remote so other environments can sync up.
 
-See rtrss-README.md for more info on using rtrss.py.
-
 ## License
 
-None - Use them to make your life better.
-
-## Contact
-
-Brian Partridge - @brianpartridge on Twitter and alpha.app.net
+MIT

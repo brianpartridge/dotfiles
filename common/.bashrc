@@ -26,25 +26,6 @@ if [ -e "$EXTENDED_PROFILE" ]; then
   source "$EXTENDED_PROFILE"
 fi
 
-# Show git branch in prompt
-function parse_git_branch {
-  git branch --no-color 2> /dev/null | sed -e '/^[^*]/d' -e "s/* \(.*\)/(\1)/"
-}
-GITPS1="$CYAN[$LIGHT_GRAY\W$CYAN]$GREEN\$(parse_git_branch)$RED\$$NO_COLOR "
-
-# Configure the title of the terminal window
-case $TERM in
-  xterm*)
-  TITLEBAR='\[\033]0;\u@\h\007\]'
-  ;;
-  *)
-  TITLEBAR=""
-  ;;
-esac
-
-# Apply the custom title and prompt values
-PS1="${TITLEBAR}$GITPS1"
-
 # Open a manpage in Preview
 function pman {
 	man -t "${1}" | open -f -a /Applications/Preview.app
@@ -99,12 +80,9 @@ alias rmtabs="gsed -i 's/\t/   /g'"
 alias osxversion="system_profiler SPSoftwareDataType | grep \"System Version:\""
 alias servedir="python -m SimpleHTTPServer"
 alias ll="ls -la"
+alias stree='open -a SourceTree .'
 
-# Enable git bash completion
-source `brew --prefix git`/etc/bash_completion.d/git-completion.bash
-complete -o default -o nospace -F _git g
-
-if [ `uname` == "Darwin" ]; then
+if [ `uname`=="Darwin" ]; then
   chflags nohidden ~/Library
 fi
 
