@@ -2,6 +2,10 @@ if [ -f ~/.bashrc ]; then
     source ~/.bashrc
 fi
 
+if [ -f ~/.aliases ]; then
+    source ~/.aliases
+fi
+
 # Configure the prompt with git/VCS info and a right prompt with the date and time
 autoload -Uz vcs_info
 precmd() { vcs_info }
