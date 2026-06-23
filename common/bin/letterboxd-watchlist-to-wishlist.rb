@@ -12,6 +12,11 @@ $conf_dir = '~/Dropbox/conf/'
 
 $logger = Logger.new(File.expand_path('~/logs/letterboxd-watchlist-to-wishlist.log'), 10, 10240)
 
+def debug(msg)
+    puts msg
+    $logger.debug msg
+end
+
 def info(msg)
   puts msg
   $logger.info msg
@@ -39,8 +44,8 @@ class LetterboxdWatchlist
 
     watchlist_page = Nokogiri::HTML(open(url, {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}))
     @items = watchlist_page
-             .css('div.poster')
-             .map { |p| p['data-film-slug'] }
+             .css('div.react-component')
+             .map { |p| p['data-item-slug'] }
              .reject { |s| s.nil? || s.empty? }
              .map { |s| Item.new(s) }
   end
@@ -148,6 +153,9 @@ def run!
   hdbits = new_hdbits
   wishlist_items = hdbits.wishlist
 
+  debug 'HDBits wishlist'
+  debug wishlist_items  
+
   # Load the cache from disk so we don't reprocess watchlist items we have arleady handeled.
   cache = load_watchlist_cache
   warn 'Cache is empty, be careful not to DOS anyone!' if cache.empty?
@@ -155,6 +163,9 @@ def run!
   # Load the watchlist
   watchlist = new_watchlist
   watchlist_items = watchlist.items
+
+  debug 'Letterboxd watchlist'
+  debug watchlist_items
 
   # Check for new, unprocessed entries on the watchlist.
   new_watchlist_items = watchlist_items.reject { |i| cache.member? i.slug }
