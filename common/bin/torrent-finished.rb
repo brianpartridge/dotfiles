@@ -86,6 +86,11 @@ class Handler
       path = media.first
       handle_media_file(path, name)
       handled = true
+    elsif media.count > 1
+      for path in media
+        handle_media_file(path, File.basename(path))
+      end
+      handled = true
     elsif rars.count == 1
       path = rars.first
       directory = File.dirname(path)
@@ -113,7 +118,7 @@ class Handler
     filename = File.basename(path)
     if !EpisodeID.from_release(name).nil?
       info 'Found single episode'
-      copy_file(path, TV_DIRECTORY)
+      link_file(path, TV_DIRECTORY)
       tweet "SUCCESS:TV Show - #{filename}"
     elsif !MovieID.from_release(name).nil?
       info 'Found movie'
@@ -151,7 +156,7 @@ class File
       return false
     end
 
-    valid_extensions = ['.mkv', '.avi', '.mov']
+    valid_extensions = ['.mkv', '.avi', '.mov', '.mp4']
     return false unless valid_extensions.include?(File.extname(file_name))
 
     true
@@ -160,7 +165,7 @@ end
 
 class Repro
   def self.cmd
-    environment = ENV.keys.select { |k| k.start_with? 'TR_TORRENT_' }.sort.map { |k| "#{k}=\"#{ENV[k]}\"" }.join(' ')
+    environment = ENV.keys.select { |k| k.start_with? 'TR_TORRENT_' }.sort.map { |k| "#{k}='#{ENV[k]}'" }.join(' ')
     script = File.expand_path(__FILE__)
     "/usr/bin/env #{environment} ruby #{script}"
   end
