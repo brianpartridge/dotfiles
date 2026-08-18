@@ -2,7 +2,7 @@
 	ui = auto
 [user]
 	name = Brian Partridge
-	email = partridgeb@vmware.com
+	email = bp@onesilo.com
 [alias]
 	merge = merge --no-ff
 	s = status
@@ -13,6 +13,7 @@
 	d = diff
 	ds = diff --stat
 	dt = difftool
+	mt = mergetool
 	b = branch
 	l = log
 	ls = log --stat
@@ -21,6 +22,8 @@
 [advice]
 	statusHints = false
 [core]
+	whitespace = trailing-space,space-before-tab
+	excludesfile = /Users/bp/.gitignore_global
 [branch]
 	autosetupmerge = true
 [merge]
@@ -32,11 +35,6 @@
 	prompt = false
 [difftool "Kaleidoscope"]
 	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
-[reviewboard]
-	url = https://reviewboard.eng.vmware.com
-[core]
-	whitespace = trailing-space,space-before-tab
-	excludesfile = /Users/partridgeb/.gitignore_global
 [difftool "sourcetree"]
 	cmd = /usr/local/bin/ksdiff -w \"$LOCAL\" \"$REMOTE\"
 	path =
@@ -48,5 +46,3 @@
 	trustExitCode = true
 [mergetool]
 	prompt = false
-[push]
-	default = simple

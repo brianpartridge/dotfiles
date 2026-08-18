@@ -21,6 +21,9 @@ bindkey '\e[B' history-beginning-search-forward
 # rg (ripgrep) config
 export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
 
+# xcodes config
+export XCODES_DIRECTORY="$HOME/Applications"
+
 # Cleans all Bazel created simulatores
 function clean_bazel_sims() {
   local devices=($(xcrun simctl list -j | jq -r '.devices[] | map(select(.name | contains("New-") or contains("BAZEL_TEST")))[]?.udid'))
