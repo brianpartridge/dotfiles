@@ -1,0 +1,242 @@
+# frozen_string_literal: true
+
+require 'rspec'
+require 'torrent_handler'
+require_relative 'spec_helper_transfers'
+
+describe Torrent do
+  it 'is nil without a name and directory' do
+    expect(Torrent.from_env({})).to be_nil
+    expect(Torrent.from_env('TR_TORRENT_NAME' => 'x')).to be_nil
+    expect(Torrent.from_env('TR_TORRENT_NAME' => '', 'TR_TORRENT_DIR' => '/tmp')).to be_nil
+  end
+
+  it 'reads the Transmission environment' do
+    t = Torrent.from_env('TR_TORRENT_NAME' => 'Show.S01E02.720p', 'TR_TORRENT_DIR' => '/dl',
+                         'TR_TORRENT_HASH' => 'ABC', 'TR_TORRENT_ID' => '7')
+    expect(t.path).to eq('/dl/Show.S01E02.720p')
+    expect(t.to_h).to eq('name' => 'Show.S01E02.720p', 'directory' => '/dl', 'hash' => 'ABC', 'id' => '7')
+  end
+
+  it 'lists files recursively, ignoring dotfiles, for names with glob characters' do
+    with_tmpdir do |dir|
+      name = 'Show [2019] S01E01'
+      touch(File.join(dir, name, 'a.mkv'))
+      touch(File.join(dir, name, 'Subs', 'a.srt'))
+      touch(File.join(dir, name, '.DS_Store'))
+      files = Torrent.new(name, dir).files
+      expect(files.map { |f| f.sub("#{dir}/#{name}/", '') }).to eq(['Subs/a.srt', 'a.mkv'])
+    end
+  end
+
+  it 'treats a single-file torrent as one file' do
+    with_tmpdir do |dir|
+      touch(File.join(dir, 'movie.mkv'))
+      expect(Torrent.new('movie.mkv', dir).files).to eq([File.join(dir, 'movie.mkv')])
+    end
+  end
+end
+
+describe MediaFile do
+  it 'recognises media extensions, including mp4, and rejects samples' do
+    with_tmpdir do |dir|
+      expect(MediaFile.valid?(touch(File.join(dir, 'a.mkv')))).to be true
+      expect(MediaFile.valid?(touch(File.join(dir, 'a.MP4')))).to be true
+      expect(MediaFile.valid?(touch(File.join(dir, 'a.m4v')))).to be true
+      expect(MediaFile.valid?(touch(File.join(dir, 'a.nfo')))).to be false
+      expect(MediaFile.valid?(touch(File.join(dir, 'a-sample.mkv')))).to be false
+      expect(MediaFile.valid?(File.join(dir, 'missing.mkv'))).to be false
+    end
+  end
+
+  it 'counts a multi-volume rar set once' do
+    with_tmpdir do |dir|
+      files = %w[x.part01.rar x.part02.rar x.part03.rar y.rar].map { |f| touch(File.join(dir, f)) }
+      expect(MediaFile.primary_rars(files).map { |f| File.basename(f) }).to eq(%w[y.rar x.part01.rar])
+    end
+  end
+end
+
+describe Outcome do
+  it 'serialises exceptions' do
+    e = RuntimeError.new('boom')
+    e.set_backtrace(['a:1', 'b:2'])
+    o = Outcome.error('failed', exception: e)
+    expect(o.error?).to be true
+    expect(o.to_h['error']).to eq('class' => 'RuntimeError', 'message' => 'boom', 'backtrace' => ['a:1', 'b:2'])
+  end
+end
+
+describe TorrentHandler do
+  around do |example|
+    with_tmpdir do |dir|
+      @dl = File.join(dir, 'downloads')
+      @tv = File.join(dir, 'tv')
+      @movies = File.join(dir, 'movies')
+      FileUtils.mkdir_p([@dl, @tv, @movies])
+      example.run
+    end
+  end
+
+  def entries(dir)
+    (Dir.entries(dir) - %w[. ..]).sort
+  end
+
+  def handler(name)
+    TorrentHandler.new(Torrent.new(name, @dl), tv_directory: @tv, movie_directory: @movies, logger: null_logger)
+  end
+
+  it 'symlinks a TV episode so the torrent keeps seeding' do
+    name = 'Some.Show.S02E05.720p.HDTV-GRP'
+    media = touch(File.join(@dl, name, "#{name}.mkv"), 'video')
+    touch(File.join(@dl, name, "#{name}.nfo"))
+    o = handler(name).run!
+    expect(o.status).to eq('ok')
+    expect(o.outcome).to eq('tv')
+    expect(o.action).to eq('link')
+    expect(o.destination).to eq(File.join(@tv, "#{name}.mkv"))
+    expect(File.readlink(o.destination)).to eq(media)
+    expect(o.message).to start_with('Linked')
+  end
+
+  it 'falls back to the file name when the torrent name does not classify' do
+    touch(File.join(@dl, 'grp-ss0205', 'Some.Show.S02E05.720p.mkv'))
+    o = handler('grp-ss0205').run!
+    expect(o.outcome).to eq('tv')
+    expect(o.destination).to eq(File.join(@tv, 'Some.Show.S02E05.720p.mkv'))
+  end
+
+  it 'symlinks a movie' do
+    name = 'Some.Movie.1999.1080p.BluRay-GRP'
+    media = touch(File.join(@dl, name, "#{name}.mkv"))
+    o = handler(name).run!
+    expect(o.outcome).to eq('movie')
+    expect(o.action).to eq('link')
+    expect(File.readlink(o.destination)).to eq(media)
+  end
+
+  it 'is idempotent for an already linked movie and replaces a stale link' do
+    name = 'Some.Movie.1999.1080p.BluRay-GRP'
+    touch(File.join(@dl, name, "#{name}.mkv"))
+    expect(handler(name).run!.message).to start_with('Linked')
+    expect(handler(name).run!.message).to start_with('Already linked')
+    File.unlink(File.join(@movies, "#{name}.mkv"))
+    File.symlink('/nowhere', File.join(@movies, "#{name}.mkv"))
+    expect(handler(name).run!.message).to start_with('Relinked')
+  end
+
+  it 'raises, rather than silently failing, when a real file blocks the link' do
+    name = 'Some.Movie.1999.1080p.BluRay-GRP'
+    touch(File.join(@dl, name, "#{name}.mkv"))
+    touch(File.join(@movies, "#{name}.mkv"))
+    expect { handler(name).run! }.to raise_error(/not a symlink/)
+  end
+
+  it 'raises when the destination volume is missing' do
+    name = 'Some.Show.S02E05.720p.HDTV-GRP'
+    touch(File.join(@dl, name, "#{name}.mkv"))
+    FileUtils.rm_rf(@tv)
+    expect { handler(name).run! }.to raise_error(/missing/)
+  end
+
+  it 'warns about torrents with no media' do
+    name = 'Some.Show.S02E05.720p.HDTV-GRP'
+    touch(File.join(@dl, name, 'readme.txt'))
+    o = handler(name).run!
+    expect(o.status).to eq('warning')
+    expect(o.outcome).to eq('no_media')
+  end
+
+  it 'files every episode of a season pack by its own name' do
+    name = 'Some.Show.S02.720p.HDTV-GRP'
+    %w[Some.Show.S02E01.720p.mkv Some.Show.S02E02.720p.mkv].each { |f| touch(File.join(@dl, name, f)) }
+    o = handler(name).run!
+    expect(o.status).to eq('ok')
+    expect(o.outcome).to eq('tv')
+    expect(o.action).to eq('link')
+    expect(o.media_file).to eq(File.join(@dl, name))
+    expect(o.destination).to eq(@tv)
+    expect(o.message).to eq("Linked 2 media files (tv) into #{@tv}")
+    expect(entries(@tv)).to eq(%w[Some.Show.S02E01.720p.mkv Some.Show.S02E02.720p.mkv])
+  end
+
+  it 'does not let a year in a pack name turn episodes into movies' do
+    name = 'Some.Show.2019.S01.1080p-GRP'
+    touch(File.join(@dl, name, 'Some.Show.S01E01.mkv'))
+    touch(File.join(@dl, name, 'Some.Show.S01E02.mkv'))
+    expect(handler(name).run!.outcome).to eq('tv')
+    expect(entries(@movies)).to be_empty
+  end
+
+  it 'warns when part of a set cannot be identified, but still files the rest' do
+    name = 'Some.Show.S02.720p.HDTV-GRP'
+    touch(File.join(@dl, name, 'Some.Show.S02E01.720p.mkv'))
+    touch(File.join(@dl, name, 'bonus-featurette.mkv'))
+    o = handler(name).run!
+    expect(o.status).to eq('warning')
+    expect(o.outcome).to eq('unknown_media')
+    expect(o.action).to eq('link')
+    expect(o.message).to eq('Linked 1 of 2 media files; could not identify: bonus-featurette.mkv')
+    expect(entries(@tv)).to eq(['Some.Show.S02E01.720p.mkv'])
+  end
+
+  it 'warns about names it cannot classify' do
+    name = 'Random.Thing.WEB-GRP'
+    touch(File.join(@dl, name, 'thing.mkv'))
+    o = handler(name).run!
+    expect(o.status).to eq('warning')
+    expect(o.outcome).to eq('unknown_media')
+    expect(o.media_file).to end_with('thing.mkv')
+  end
+
+  context 'archives' do
+    let(:name) { 'Some.Show.S02E05.720p.HDTV-GRP' }
+
+    it 'raises when unrar is not installed' do
+      touch(File.join(@dl, name, "#{name}.rar"))
+      h = handler(name)
+      allow(h).to receive(:system).and_return(nil)
+      expect { h.run! }.to raise_error(/unrar not found/)
+    end
+
+    it 'raises when unrar fails' do
+      touch(File.join(@dl, name, "#{name}.rar"))
+      h = handler(name)
+      allow(h).to receive(:system) { `exit 3`; false }
+      expect { h.run! }.to raise_error(/unrar exited with status 3/)
+    end
+
+    it 'files the media that extraction produced' do
+      touch(File.join(@dl, name, "#{name}.rar"))
+      h = handler(name)
+      allow(h).to receive(:system) do |*_args, **_opts|
+        touch(File.join(@dl, name, "#{name}.mkv"))
+        true
+      end
+      o = h.run!
+      expect(o.outcome).to eq('tv')
+      expect(o.action).to eq('extract_link')
+    end
+
+    it 'files a set that extraction produced' do
+      touch(File.join(@dl, name, "#{name}.rar"))
+      h = handler(name)
+      allow(h).to receive(:system) do |*_args, **_opts|
+        touch(File.join(@dl, name, 'Some.Show.S02E05.mkv'))
+        touch(File.join(@dl, name, 'Some.Show.S02E06.mkv'))
+        true
+      end
+      o = h.run!
+      expect(o.outcome).to eq('tv')
+      expect(o.action).to eq('extract_link')
+      expect(o.message).to start_with('Linked 2 media files')
+    end
+
+    it 'warns when extraction produced nothing useful' do
+      touch(File.join(@dl, name, "#{name}.rar"))
+      h = handler(name)
+      allow(h).to receive(:system).and_return(true)
+      expect(h.run!.outcome).to eq('no_media')
+    end
+  end
+end

@@ -14,7 +14,7 @@ $dl_dir = '~/Dropbox/torrents/'
 
 # DO NOT MODIFY BELOW THIS LINE #
 
-$logger = Logger.new(File.expand_path('~/logs/wishlist-downloader.log'), 10, 10240)
+$logger = Logger.new(File.expand_path('~/logs/wishlist-downloader.log'), 10, 10 * 1024 * 1024)
 
 def info(msg)
   puts msg
