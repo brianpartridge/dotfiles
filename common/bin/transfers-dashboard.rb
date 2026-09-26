@@ -13,7 +13,8 @@ OptionParser.new do |opts|
     Usage: transfers-dashboard.rb [options]
 
     With no options, regenerates the HTML dashboard (default #{TransferDashboard::DEFAULT_OUTPUT},
-    override with --out or $TRANSFER_DASHBOARD).
+    override with --out or $TRANSFER_DASHBOARD). The digest links to #{TransferDashboard.url}
+    (override with $TRANSFER_DASHBOARD_URL).
   USAGE
   opts.on('-t', '--text [N]', Integer, 'Print the last N transfers (default 25) instead of writing HTML') do |n|
     options[:mode] = :text

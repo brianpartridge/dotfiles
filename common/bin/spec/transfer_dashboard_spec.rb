@@ -139,11 +139,33 @@ describe TransferDashboard do
       expect(@sent.last['priority']).to eq(-1)
     end
 
+    it 'links to the dashboard' do
+      TransferDashboard.digest(build(records: []))
+      expect(@sent.last['url']).to eq(TransferDashboard.url)
+      expect(@sent.last['url_title']).to eq('Open the dashboard')
+    end
+
     it 'sends high priority when something is unhandled' do
       r = build(records: records, torrents: [torrent('Never.Handled', 'ddd')])
       TransferDashboard.digest(r)
       expect(@sent.last['priority']).to eq(1)
       expect(@sent.last['message']).to include('✓ Show.S01E01', 'no record', '• Never.Handled')
+    end
+  end
+
+  describe '.url' do
+    it 'derives a Bonjour address from the hostname' do
+      allow(Socket).to receive(:gethostname).and_return('theater-mac')
+      expect(TransferDashboard.url).to eq('http://theater-mac.local/transfers/')
+      allow(Socket).to receive(:gethostname).and_return('theater-mac.local')
+      expect(TransferDashboard.url).to eq('http://theater-mac.local/transfers/')
+    end
+
+    it 'can be overridden' do
+      ENV['TRANSFER_DASHBOARD_URL'] = 'http://example.test/x/'
+      expect(TransferDashboard.url).to eq('http://example.test/x/')
+    ensure
+      ENV.delete('TRANSFER_DASHBOARD_URL')
     end
   end
 

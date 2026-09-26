@@ -51,10 +51,25 @@ about it, and how to see what happened to recent transfers.
 
    If launchd refuses a symlinked plist, copy the files instead of stowing them.
 
-5. **Dashboard location.** Defaults to `~/Dropbox/transfers/index.html`; override
-   with `$TRANSFER_DASHBOARD` or `transfers-dashboard.rb --out PATH`. Dropbox
-   syncs it to your phone. If the Dropbox app shows the page as source rather
-   than rendering it, open it via the Files app or share it to Safari.
+5. **Serve the dashboard with the Mac's built-in Apache.** macOS 10.13 ships
+   Apache 2.4; this turns it on, keeps it running across reboots, and gives
+   your user a folder under its document root to write into:
+
+       sudo apachectl start
+       sudo launchctl load -w /System/Library/LaunchDaemons/org.apache.httpd.plist
+       sudo mkdir -p /Library/WebServer/Documents/transfers
+       sudo chown $USER /Library/WebServer/Documents/transfers
+
+   The dashboard is written to `/Library/WebServer/Documents/transfers/index.html`
+   by default and is reachable from any device on your network at
+   `http://<mac-name>.local/transfers/`. The nightly digest carries that link.
+   Check the name with `scutil --get LocalHostName`; if the page should be
+   reached at some other address, set `TRANSFER_DASHBOARD_URL` in the digest
+   launch agent. To write the page somewhere else entirely, set
+   `TRANSFER_DASHBOARD` or use `transfers-dashboard.rb --out PATH`.
+
+   Anyone on your network can open the page, and it lists file names and
+   paths, so do not expose it to the internet without authentication.
 
 ## Ruby
 
@@ -94,6 +109,7 @@ Notifications you will get:
 | Notification says failed | The record's Details on the dashboard: error, backtrace, and a `Re-run` command you can paste into a terminal. |
 | Dashboard lists "complete but unhandled" (torrents that finished in the last 7 days with no record) | `~/logs/torrent-finished.out`. If there is no entry for that torrent, Transmission never ran the script (check the preference and that the `.sh` is executable). If there is an entry but it stops short, that output is the crash. |
 | No notifications at all | `~/logs/torrent-finished.out` will contain `[notify] ...` lines explaining why (missing config, HTTP error). |
+| Dashboard 404s or is not reachable | `sudo apachectl status` or `curl -I http://localhost/transfers/` on the Mac; make sure the launch daemon was loaded with `-w` so Apache survives a reboot. |
 | Dashboard shows "Transmission unreachable" | Remote access is off, or `transmission.json` is wrong. Everything else still works. |
 | Nightly digest missing | `launchctl list | grep transfers` and `~/logs/transfers-digest.out`. |
 

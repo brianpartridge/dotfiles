@@ -4,20 +4,23 @@ require 'cgi'
 require 'erb'
 require 'fileutils'
 require 'set'
+require 'socket'
 require 'time'
 require_relative 'notify'
 require_relative 'transfer_log'
 require_relative 'transmission_rpc'
 
-# Builds the transfers dashboard: a single static HTML page (intended to live
-# in Dropbox so it can be opened from anywhere), a plain-text version for the
-# terminal, and a daily Pushover digest.
+# Builds the transfers dashboard: a single static HTML page served by the
+# Mac's built-in Apache (see README-transfers.md), a plain-text version for
+# the terminal, and a daily Pushover digest that links to the page.
 #
 # Besides the transfer log it asks Transmission which torrents are complete,
 # so that a torrent that finished without the done-script ever running (the
 # quietest failure of all) shows up as "unhandled".
 module TransferDashboard
-  DEFAULT_OUTPUT = '~/Dropbox/transfers/index.html'
+  # Apache's document root on macOS; enable it with `sudo apachectl start`.
+  DEFAULT_OUTPUT = '/Library/WebServer/Documents/transfers/index.html'
+  DEFAULT_URL_PATH = '/transfers/'
   RECENT_LIMIT = 200
   DAY = 24 * 60 * 60
   WEEK = 7 * DAY
@@ -110,13 +113,23 @@ module TransferDashboard
 
   module_function
 
+  # Where the page can be opened from another device. Override with
+  # $TRANSFER_DASHBOARD_URL when it is served from somewhere else.
+  def url
+    return ENV['TRANSFER_DASHBOARD_URL'] unless ENV['TRANSFER_DASHBOARD_URL'].to_s.empty?
+
+    host = Socket.gethostname.to_s
+    host = "#{host}.local" unless host.empty? || host.include?('.')
+    "http://#{host}#{DEFAULT_URL_PATH}"
+  end
+
   def generate(output: nil, quiet: false, report: nil)
     report ||= Report.new
     path = File.expand_path(output || ENV['TRANSFER_DASHBOARD'] || DEFAULT_OUTPUT)
     FileUtils.mkdir_p(File.dirname(path))
     tmp = "#{path}.tmp"
     File.write(tmp, Html.new(report).render)
-    File.rename(tmp, path) # so Dropbox never syncs a half-written page
+    File.rename(tmp, path) # so a reader never gets a half-written page
     puts "Wrote #{path}" unless quiet
     path
   end
@@ -147,7 +160,8 @@ module TransferDashboard
     lines << '' << "Transmission unreachable: #{report.rpc_error}" if report.rpc_error
 
     trouble = counts['error'].positive? || !unhandled.empty? || report.rpc_error
-    Notify.push(lines.join("\n"), title: title, priority: trouble ? :high : :low)
+    Notify.push(lines.join("\n"), title: title, priority: trouble ? :high : :low,
+                                   url: url, url_title: 'Open the dashboard')
   end
 
   def status_glyph(status)
@@ -205,7 +219,7 @@ module TransferDashboard
   end
 
   # Static HTML rendering. No JavaScript, no external assets, so it reads the
-  # same from Dropbox on a phone as it does in a desktop browser.
+  # same on a phone as it does in a desktop browser.
   class Html
     def initialize(report)
       @report = report
