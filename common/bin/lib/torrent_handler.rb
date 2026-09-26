@@ -95,8 +95,10 @@ class Outcome
     new(status: 'ok', outcome: outcome, message: message, **rest)
   end
 
-  def self.warning(outcome, message, **rest)
-    new(status: 'warning', outcome: outcome, message: message, **rest)
+  # Finished fine, but there was nothing to file for Plex: not a TV episode
+  # or a movie, no media files at all, or nothing to pick from an archive.
+  def self.other(outcome, message, **rest)
+    new(status: 'other', outcome: outcome, message: message, **rest)
   end
 
   def self.error(message, outcome: 'error', exception: nil, **rest)
@@ -113,6 +115,10 @@ class Outcome
 
   def ok?
     @status == 'ok'
+  end
+
+  def other?
+    @status == 'other'
   end
 
   def error?
@@ -159,9 +165,9 @@ class TorrentHandler
     elsif rars.count == 1
       extract_and_handle(rars.first)
     elsif rars.empty?
-      Outcome.warning('no_media', "No media files found among #{files.count} files")
+      Outcome.other('no_media', "No media files among #{files.count} files")
     else
-      Outcome.warning('multiple_media', "Found #{rars.count} archives and no media files; unable to pick one")
+      Outcome.other('multiple_media', "#{rars.count} archives and no media files; nothing to pick")
     end
   end
 
@@ -179,7 +185,7 @@ class TorrentHandler
     if new_media.count == 1
       handle_media(new_media.first, extracted: true)
     elsif new_media.empty?
-      Outcome.warning('no_media', "Archive #{File.basename(rar)} contained no media files")
+      Outcome.other('no_media', "Archive #{File.basename(rar)} contained no media files")
     else
       handle_media_set(new_media, extracted: true)
     end
@@ -194,24 +200,26 @@ class TorrentHandler
   end
 
   # A season pack, or a movie with extras: the torrent's name describes the
-  # set, so each file is classified and filed on its own name.
+  # set, so each file is classified and filed on its own name. Files that are
+  # neither TV nor a movie are skipped, which is fine as long as something
+  # was filed.
   def handle_media_set(media, extracted: false)
     results = media.map { |path| handle_media(path, extracted: extracted, by_filename: true) }
     filed = results.select(&:ok?)
-    unknown = results.reject(&:ok?)
+    skipped = results.reject(&:ok?).map { |o| File.basename(o.media_file) }
     action = extracted ? 'extract_link' : 'link'
     kinds = filed.map(&:outcome).uniq
     destination = kinds.count == 1 ? File.dirname(filed.first.destination) : nil
 
-    if unknown.empty?
-      Outcome.ok(kinds == ['movie'] ? 'movie' : 'tv',
-                 "Linked #{filed.count} media files (#{kinds.join(' and ')}) into #{destination || 'tv and movies'}",
-                 action: action, media_file: @torrent.path, destination: destination)
+    if filed.empty?
+      Outcome.other('unknown_media',
+                    "None of #{media.count} media files recognised as TV or a movie: #{skipped.join(', ')}",
+                    media_file: @torrent.path)
     else
-      names = unknown.map { |o| File.basename(o.media_file) }.join(', ')
-      Outcome.warning('unknown_media',
-                      "Linked #{filed.count} of #{media.count} media files; could not identify: #{names}",
-                      action: filed.empty? ? 'none' : action, media_file: @torrent.path, destination: destination)
+      message = "Linked #{filed.count} of #{media.count} media files (#{kinds.join(' and ')}) into #{destination || 'tv and movies'}"
+      message += "; skipped: #{skipped.join(', ')}" unless skipped.empty?
+      Outcome.ok(kinds == ['movie'] ? 'movie' : 'tv', message,
+                 action: action, media_file: @torrent.path, destination: destination)
     end
   end
 
@@ -231,8 +239,8 @@ class TorrentHandler
       destination, note = link_file(path, @movie_directory)
       Outcome.ok('movie', "#{note} #{filename} into #{@movie_directory}", action: action, media_file: path, destination: destination)
     else
-      Outcome.warning('unknown_media', "Could not identify '#{by_filename ? filename : @torrent.name}' as a TV episode or a movie",
-                      media_file: path)
+      Outcome.other('unknown_media', "'#{by_filename ? filename : @torrent.name}' is not a TV episode or a movie",
+                    media_file: path)
     end
   end
 

@@ -3,6 +3,7 @@
 require 'cgi'
 require 'erb'
 require 'fileutils'
+require 'json'
 require 'set'
 require 'socket'
 require 'time'
@@ -27,17 +28,20 @@ module TransferDashboard
   UNHANDLED_WINDOW = WEEK # how far back to look for complete-but-unhandled torrents
 
   STATUS_LABELS = {
-    'ok' => 'OK',
-    'warning' => 'Needs attention',
+    'ok' => 'Filed',
+    'other' => 'Other',
     'error' => 'Failed'
   }.freeze
+
+  # Records written before "other" existed used "warning" for the same thing.
+  LEGACY_STATUSES = { 'warning' => 'other' }.freeze
 
   OUTCOME_LABELS = {
     'tv' => 'TV episode',
     'movie' => 'Movie',
-    'no_media' => 'No media found',
-    'multiple_media' => 'Multiple media files',
-    'unknown_media' => 'Unrecognised name',
+    'no_media' => 'No media files',
+    'multiple_media' => 'Could not pick a file',
+    'unknown_media' => 'Not TV or a movie',
     'error' => 'Error',
     'no_torrent' => 'No torrent info'
   }.freeze
@@ -48,7 +52,9 @@ module TransferDashboard
 
     def initialize(log: TransferLog.new, rpc: TransmissionRPC.from_config, limit: RECENT_LIMIT, now: Time.now)
       @generated_at = now
-      @records = log.records(limit: limit)
+      @records = log.records(limit: limit).map do |r|
+        r.merge('status' => LEGACY_STATUSES.fetch(r['status'], r['status']))
+      end
       @torrents = []
       @rpc_error = nil
       begin
@@ -67,7 +73,7 @@ module TransferDashboard
     end
 
     def counts(seconds)
-      counts = { 'ok' => 0, 'warning' => 0, 'error' => 0 }
+      counts = { 'ok' => 0, 'other' => 0, 'error' => 0 }
       records_since(seconds).each { |r| counts[r['status']] = counts.fetch(r['status'], 0) + 1 }
       counts
     end
@@ -127,11 +133,42 @@ module TransferDashboard
     report ||= Report.new
     path = File.expand_path(output || ENV['TRANSFER_DASHBOARD'] || DEFAULT_OUTPUT)
     FileUtils.mkdir_p(File.dirname(path))
-    tmp = "#{path}.tmp"
-    File.write(tmp, Html.new(report).render)
-    File.rename(tmp, path) # so a reader never gets a half-written page
-    puts "Wrote #{path}" unless quiet
+    write_atomically(path, Html.new(report).render)
+    json_path = File.join(File.dirname(path), 'transfers.json')
+    write_atomically(json_path, JSON.pretty_generate(summary(report)))
+    puts "Wrote #{path} and #{File.basename(json_path)}" unless quiet
     path
+  end
+
+  # The latest record per torrent, keyed by hash and by name, for the
+  # Transmission web UI's per-row indicator (common/web/transmission/javascript/extras/transfers.js).
+  def summary(report)
+    by_hash = {}
+    by_name = {}
+    report.records.each do |r|
+      torrent = r['torrent'] || {}
+      entry = {
+        'ts' => r['ts'], 'status' => r['status'], 'outcome' => r['outcome'],
+        'message' => r['message'], 'destination' => r['destination']
+      }
+      hash = torrent['hash'].to_s.downcase
+      name = torrent['name'].to_s
+      by_hash[hash] ||= entry unless hash.empty? # records are newest first
+      by_name[name] ||= entry unless name.empty?
+    end
+    {
+      'generated_at' => report.generated_at.iso8601,
+      'unhandled_window_days' => UNHANDLED_WINDOW / DAY,
+      'dashboard_url' => url,
+      'by_hash' => by_hash,
+      'by_name' => by_name
+    }
+  end
+
+  def write_atomically(path, content)
+    tmp = "#{path}.tmp"
+    File.write(tmp, content)
+    File.rename(tmp, path) # so a reader never gets a half-written file
   end
 
   def text(report = nil, limit: 25)
@@ -147,7 +184,7 @@ module TransferDashboard
     unhandled = report.unhandled
     hours = (window / 3600).round
 
-    title = "Transfers, last #{hours}h: #{counts['ok']} ok, #{counts['warning']} attention, #{counts['error']} failed"
+    title = "Transfers, last #{hours}h: #{counts['ok']} filed, #{counts['other']} other, #{counts['error']} failed"
     lines = report.records_since(window).first(10).map do |r|
       "#{status_glyph(r['status'])} #{torrent_name(r)}"
     end
@@ -165,7 +202,7 @@ module TransferDashboard
   end
 
   def status_glyph(status)
-    { 'ok' => '✓', 'warning' => '!', 'error' => '✕' }.fetch(status, '?')
+    { 'ok' => '✓', 'other' => '–', 'error' => '✕' }.fetch(status, '?')
   end
 
   def torrent_name(record)
@@ -194,7 +231,7 @@ module TransferDashboard
       out = []
       now = @report.generated_at
       week = @report.counts(WEEK)
-      out << "Transfers (last 7 days): #{week['ok']} ok, #{week['warning']} attention, #{week['error']} failed"
+      out << "Transfers (last 7 days): #{week['ok']} filed, #{week['other']} other, #{week['error']} failed"
       out << "Transmission: #{@report.rpc_error ? "unreachable (#{@report.rpc_error})" : "#{@report.completed.count} complete, #{@report.active.count} active"}"
 
       unhandled = @report.unhandled
@@ -334,11 +371,11 @@ module TransferDashboard
         .tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
         .tile .label { font-size: 12px; color: var(--text-2); }
         .tile .value { font-size: 30px; font-weight: 600; line-height: 1.15; margin-top: 4px; }
-        .tile.attn .value::before, .tile.fail .value::before, .tile.ok .value::before {
+        .tile.other .value::before, .tile.fail .value::before, .tile.ok .value::before {
           display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 8px 4px 0; content: "";
         }
         .tile.ok .value::before { background: var(--good); }
-        .tile.attn .value::before { background: var(--warning); }
+        .tile.other .value::before { background: var(--text-3); }
         .tile.fail .value::before { background: var(--critical); }
         .notice { border-left: 3px solid var(--warning); background: var(--surface-2); padding: 10px 12px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
         .notice.critical { border-color: var(--critical); }
@@ -347,14 +384,14 @@ module TransferDashboard
         ul.list li:first-child { border-top: 0; }
         .badge { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
         .badge.ok { background: var(--good); }
-        .badge.warning { background: var(--warning); }
+        .badge.other { background: var(--text-3); }
         .badge.error { background: var(--critical); }
         .body > * + * { margin-top: 2px; }
         .name { font-weight: 600; word-break: break-word; }
         .meta { color: var(--text-2); font-size: 13px; }
         .meta b { font-weight: 600; color: var(--text); }
         .msg { font-size: 13px; color: var(--text-2); word-break: break-word; }
-        li.warning .msg, li.error .msg { color: var(--text); }
+        li.error .msg { color: var(--text); }
         details { font-size: 12px; margin-top: 4px; }
         summary { cursor: pointer; color: var(--accent); }
         pre { background: var(--surface-2); padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0 0; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
@@ -374,7 +411,7 @@ module TransferDashboard
         <%- week = @report.counts(WEEK); unhandled = @report.unhandled -%>
         <section class="tiles" aria-label="Last 7 days">
           <div class="tile ok"><div class="label">Filed OK, 7 days</div><div class="value"><%= week['ok'] %></div></div>
-          <div class="tile attn"><div class="label">Needs attention, 7 days</div><div class="value"><%= week['warning'] %></div></div>
+          <div class="tile other"><div class="label">Other, 7 days</div><div class="value"><%= week['other'] %></div></div>
           <div class="tile fail"><div class="label">Failed, 7 days</div><div class="value"><%= week['error'] %></div></div>
           <div class="tile <%= unhandled.empty? ? '' : 'fail' %>"><div class="label">Complete but unhandled, <%= UNHANDLED_WINDOW / DAY %> days</div><div class="value"><%= @report.rpc_error ? '?' : unhandled.count %></div></div>
         </section>

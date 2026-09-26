@@ -92,9 +92,10 @@ Notifications you will get:
 
 - **TV ready / Movie ready** on every successful transfer, including season
   packs, where every episode is linked on its own file name.
-- **Transfer needs attention** when something was not filed: no media file, a
-  file whose name is neither `S01E02` nor `Title.2004`, or an archive that
-  extracted to nothing usable.
+- **Transfer complete** when the download finished fine but there was nothing
+  to file for Plex: no media files, a name that is neither `S01E02` nor
+  `Title.2004`, or an archive that extracted to nothing usable. This is not an
+  error; the dashboard counts it as "other".
 - **Transfer failed** (high priority) when something went wrong: destination
   volume not mounted, copy failed, `unrar` missing or failing, a real file in
   the way of a movie symlink, or a crash.
@@ -119,12 +120,14 @@ Logs:
 - `~/logs/torrent-finished.log`: the Ruby script's own log, 10 files of 10 MB
   (it used to be 10 files of 1 KB, which is why history kept vanishing).
 - `~/logs/transfers.jsonl`: one JSON object per run; the dashboard's source of truth.
+- `transfers.json` next to the dashboard page: the latest record per torrent, read by the
+  Transmission web UI's transfers indicator (see `common/web/README.md`).
 
 ## Record format
 
 Each line of `transfers.jsonl`:
 
-    ts, status (ok|warning|error), outcome (tv|movie|no_media|multiple_media|unknown_media|error|no_torrent),
+    ts, status (ok|other|error), outcome (tv|movie|no_media|multiple_media|unknown_media|error|no_torrent),
     action (link|extract_link|none), message, media_file, destination,
     torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro
 

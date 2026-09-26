@@ -139,11 +139,12 @@ describe TorrentHandler do
     expect { handler(name).run! }.to raise_error(/missing/)
   end
 
-  it 'warns about torrents with no media' do
+  it 'treats torrents with no media as other, not a failure' do
     name = 'Some.Show.S02E05.720p.HDTV-GRP'
     touch(File.join(@dl, name, 'readme.txt'))
     o = handler(name).run!
-    expect(o.status).to eq('warning')
+    expect(o.status).to eq('other')
+    expect(o.other?).to be true
     expect(o.outcome).to eq('no_media')
   end
 
@@ -156,7 +157,7 @@ describe TorrentHandler do
     expect(o.action).to eq('link')
     expect(o.media_file).to eq(File.join(@dl, name))
     expect(o.destination).to eq(@tv)
-    expect(o.message).to eq("Linked 2 media files (tv) into #{@tv}")
+    expect(o.message).to eq("Linked 2 of 2 media files (tv) into #{@tv}")
     expect(entries(@tv)).to eq(%w[Some.Show.S02E01.720p.mkv Some.Show.S02E02.720p.mkv])
   end
 
@@ -168,23 +169,34 @@ describe TorrentHandler do
     expect(entries(@movies)).to be_empty
   end
 
-  it 'warns when part of a set cannot be identified, but still files the rest' do
+  it 'files the recognisable part of a set and reports the rest as skipped' do
     name = 'Some.Show.S02.720p.HDTV-GRP'
     touch(File.join(@dl, name, 'Some.Show.S02E01.720p.mkv'))
     touch(File.join(@dl, name, 'bonus-featurette.mkv'))
     o = handler(name).run!
-    expect(o.status).to eq('warning')
-    expect(o.outcome).to eq('unknown_media')
+    expect(o.status).to eq('ok')
+    expect(o.outcome).to eq('tv')
     expect(o.action).to eq('link')
-    expect(o.message).to eq('Linked 1 of 2 media files; could not identify: bonus-featurette.mkv')
+    expect(o.message).to eq("Linked 1 of 2 media files (tv) into #{@tv}; skipped: bonus-featurette.mkv")
     expect(entries(@tv)).to eq(['Some.Show.S02E01.720p.mkv'])
   end
 
-  it 'warns about names it cannot classify' do
+  it 'is other when nothing in a set is recognisable' do
+    name = 'Concert.Bundle-GRP'
+    touch(File.join(@dl, name, 'part-a.mkv'))
+    touch(File.join(@dl, name, 'part-b.mkv'))
+    o = handler(name).run!
+    expect(o.status).to eq('other')
+    expect(o.outcome).to eq('unknown_media')
+    expect(o.message).to eq('None of 2 media files recognised as TV or a movie: part-a.mkv, part-b.mkv')
+    expect(entries(@tv)).to eq([])
+  end
+
+  it 'is other for a single file that is neither TV nor a movie' do
     name = 'Random.Thing.WEB-GRP'
     touch(File.join(@dl, name, 'thing.mkv'))
     o = handler(name).run!
-    expect(o.status).to eq('warning')
+    expect(o.status).to eq('other')
     expect(o.outcome).to eq('unknown_media')
     expect(o.media_file).to end_with('thing.mkv')
   end
@@ -229,7 +241,7 @@ describe TorrentHandler do
       o = h.run!
       expect(o.outcome).to eq('tv')
       expect(o.action).to eq('extract_link')
-      expect(o.message).to start_with('Linked 2 media files')
+      expect(o.message).to start_with('Linked 2 of 2 media files')
     end
 
     it 'warns when extraction produced nothing useful' do

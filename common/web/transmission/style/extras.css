@@ -1,0 +1,41 @@
+/* Local additions on top of Transmission's stylesheets. See javascript/extras/. */
+
+/* Transfers indicator (javascript/extras/transfers.js) */
+ul.torrent_list li.torrent { position: relative; }
+ul.torrent_list li.torrent div.torrent_name { padding-right: 88px; }
+ul.torrent_list li.torrent a.transfer_badge {
+  position: absolute;
+  top: 6px;
+  right: 34px;
+  float: none;
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 15px;
+  letter-spacing: .02em;
+  color: #fff;
+  background: #8d8c85;
+  text-decoration: none;
+  white-space: nowrap;
+}
+/* Compact rows have no room for text: show a dot at the left of the name instead. */
+ul.torrent_list li.torrent.compact div.torrent_name { padding-right: 0; padding-left: 14px; }
+ul.torrent_list li.torrent.compact a.transfer_badge {
+  top: 7px;
+  left: 4px;
+  right: auto;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0;
+  line-height: 0;
+}
+ul.torrent_list li.torrent a.transfer_badge.tv,
+ul.torrent_list li.torrent a.transfer_badge.movie { background: #0ca30c; }
+ul.torrent_list li.torrent a.transfer_badge.other { background: #8d8c85; }
+ul.torrent_list li.torrent a.transfer_badge.error,
+ul.torrent_list li.torrent a.transfer_badge.unhandled { background: #d03b3b; }
+ul.torrent_list li.torrent a.transfer_badge:hover { filter: brightness(1.1); }

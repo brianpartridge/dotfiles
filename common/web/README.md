@@ -60,13 +60,48 @@ A 409 on the last one is correct: it proves the proxy reached Transmission.
 A 503 means Transmission's remote access is off or on another port. A 404 on
 the second means nothing has been deployed yet.
 
+## Working on it
+
+A dev server serves this checkout the way Apache does, so edits show up on
+reload without deploying. It runs on the system Ruby with no gems:
+
+    ruby ~/dotfiles/common/web/tools/devserver.rb            # http://localhost:8080/transmission/
+    ruby ~/dotfiles/common/web/tools/devserver.rb --mock     # no Transmission needed: sample torrents and transfers
+
+Without `--mock` it proxies the RPC to `localhost:9091` (`--rpc URL` to point
+elsewhere, for example at the server from a laptop) and serves the transfers
+dashboard directory for `transfers.json` (`--transfers DIR`).
+
 ## Extending it
 
 Transmission 2.93's UI is plain HTML, CSS and jQuery: `transmission/index.html`,
 `transmission/javascript/*.js` (`transmission.js` is the application,
 `remote.js` the RPC client, `torrent-row.js` the list rows, `inspector.js` the
-details pane) and `transmission/style/transmission/*.css`. Commit changes here
-like any other file.
+details pane) and `transmission/style/transmission/*.css`.
+
+Keep upstream's files untouched where possible. Local additions live in
+`transmission/javascript/extras/` and `transmission/style/extras.css`, and
+`index.html` includes them after upstream's scripts. They hook the global
+`Transmission` and `Torrent` objects rather than editing them, so bringing in
+a newer upstream tree later is a matter of re-adding two lines to `index.html`.
+
+### Transfers indicator (`javascript/extras/transfers.js`)
+
+Adds a badge to each finished torrent showing how `torrent-finished.rb`
+processed it:
+
+| Badge | Meaning |
+|---|---|
+| **TV**, **Movie** (green) | filed for Plex; hover for the destination |
+| **Other** (grey) | finished fine, nothing to file: not TV or a movie, no media files, or nothing usable in an archive |
+| **Failed** (red) | the handler hit an error; hover for the message |
+| **Not handled** (red) | completed in the last 7 days but the script left no record, so it never ran or crashed before recording |
+
+Torrents still downloading, and ones that completed before the window, get no
+badge. Clicking a badge opens the transfers dashboard. The data is
+`/transfers/transfers.json`, which `transfers-dashboard.rb` writes next to the
+dashboard page (the latest record per torrent, keyed by hash and by name),
+refreshed every minute by the page.
 
 The same directory can also replace the UI Transmission serves itself on port
 9091: Transmission looks in `~/Library/Application Support/Transmission/web`

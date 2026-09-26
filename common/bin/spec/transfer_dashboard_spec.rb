@@ -33,15 +33,23 @@ describe TransferDashboard do
         'message' => 'RuntimeError: Destination directory is missing', 'torrent' => { 'name' => 'Film.2001', 'hash' => 'bbb' },
         'error' => { 'class' => 'RuntimeError', 'message' => 'missing', 'backtrace' => ['x.rb:1'] }, 'repro' => 'env ... ruby x' },
       { 'ts' => (now - 10 * 86_400).iso8601, 'status' => 'warning', 'outcome' => 'no_media', 'action' => 'none',
-        'message' => 'No media files found', 'torrent' => { 'name' => 'Old.Thing', 'hash' => 'ccc' } }
+        'message' => 'No media files found', 'torrent' => { 'name' => 'Old.Thing', 'hash' => 'ccc' } },
+      { 'ts' => (now - 12 * 86_400).iso8601, 'status' => 'ok', 'outcome' => 'movie', 'action' => 'link',
+        'message' => 'older record for the same torrent', 'torrent' => { 'name' => 'Show.S01E01', 'hash' => 'AAA' } }
     ]
   end
 
   describe TransferDashboard::Report do
     it 'counts by status within a window' do
       r = build(records: records)
-      expect(r.counts(TransferDashboard::WEEK)).to eq('ok' => 1, 'warning' => 0, 'error' => 1)
-      expect(r.counts(TransferDashboard::DAY)).to eq('ok' => 1, 'warning' => 0, 'error' => 0)
+      expect(r.counts(TransferDashboard::WEEK)).to eq('ok' => 1, 'other' => 0, 'error' => 1)
+      expect(r.counts(TransferDashboard::DAY)).to eq('ok' => 1, 'other' => 0, 'error' => 0)
+    end
+
+    it 'reads legacy warning records as other' do
+      r = build(records: records)
+      expect(r.records.map { |x| x['status'] }).to eq(%w[ok error other ok])
+      expect(r.counts(30 * 86_400)['other']).to eq(1)
     end
 
     it 'flags complete torrents with no record, matching by hash (any case) or name' do
@@ -88,6 +96,21 @@ describe TransferDashboard do
       end
     end
 
+    it 'writes transfers.json with the latest record per torrent' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        TransferDashboard.generate(report: build(records: records), output: out, quiet: true)
+        json = JSON.parse(File.read(File.join(dir, 'transfers.json')))
+        expect(json['unhandled_window_days']).to eq(7)
+        expect(json['dashboard_url']).to eq(TransferDashboard.url)
+        expect(json['by_hash'].keys).to eq(%w[aaa bbb ccc])
+        expect(json['by_hash']['aaa']['outcome']).to eq('tv') # newest wins over the older movie record
+        expect(json['by_hash']['ccc']['status']).to eq('other') # legacy warning normalised
+        expect(json['by_name']['Film.2001']).to include('status' => 'error', 'message' => 'RuntimeError: Destination directory is missing')
+        expect(File.exist?(File.join(dir, 'transfers.json.tmp'))).to be false
+      end
+    end
+
     it 'escapes HTML in torrent names' do
       with_tmpdir do |dir|
         out = File.join(dir, 'index.html')
@@ -112,7 +135,7 @@ describe TransferDashboard do
   describe '.text' do
     it 'summarises for the terminal' do
       text = TransferDashboard.text(build(records: records, torrents: [torrent('Never.Handled', 'ddd')]))
-      expect(text).to include('1 ok, 0 attention, 1 failed', 'UNHANDLED', 'Never.Handled', 'Show.S01E01', '10m ago')
+      expect(text).to include('1 filed, 0 other, 1 failed', 'UNHANDLED', 'Never.Handled', 'Show.S01E01', '10m ago')
       expect(text).to include('Destination directory is missing')
     end
   end
@@ -134,7 +157,7 @@ describe TransferDashboard do
 
     it 'sends a low-priority summary on a quiet day' do
       expect(TransferDashboard.digest(build(records: []))).to be true
-      expect(@sent.last['title']).to eq('Transfers, last 24h: 0 ok, 0 attention, 0 failed')
+      expect(@sent.last['title']).to eq('Transfers, last 24h: 0 filed, 0 other, 0 failed')
       expect(@sent.last['message']).to include('no transfers')
       expect(@sent.last['priority']).to eq(-1)
     end

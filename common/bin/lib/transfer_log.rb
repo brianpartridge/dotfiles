@@ -10,7 +10,7 @@ require 'time'
 # Record shape (all keys are strings):
 #
 #   ts          ISO 8601 time the record was written
-#   status      "ok" | "warning" | "error"
+#   status      "ok" (filed for Plex) | "other" (finished, nothing to file) | "error"
 #   outcome     "tv" | "movie" | "no_media" | "multiple_media" |
 #               "unknown_media" | "error" | "no_torrent"
 #   action      "link" | "extract_link" | "none"
@@ -24,7 +24,7 @@ require 'time'
 #   repro       command line to re-run the handler for this torrent
 class TransferLog
   DEFAULT_PATH = '~/logs/transfers.jsonl'
-  STATUSES = %w[ok warning error].freeze
+  STATUSES = %w[ok other error].freeze
   OUTCOMES = %w[tv movie no_media multiple_media unknown_media error no_torrent].freeze
 
   attr_reader :path

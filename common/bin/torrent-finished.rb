@@ -71,7 +71,7 @@ def notify_outcome(torrent, outcome)
   when 'error', 'no_torrent'
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer failed', priority: :high)
   else
-    Notify.push("#{name}\n#{outcome.message}", title: 'Transfer needs attention')
+    Notify.push("#{name}\n#{outcome.message}", title: 'Transfer complete')
   end
 end
 
@@ -92,7 +92,7 @@ def main
   torrent = Torrent.from_env
   outcome = handle(torrent, log)
   duration = (Time.now - started).round(1)
-  log.send(outcome.ok? ? :info : (outcome.error? ? :error : :warn),
+  log.send(outcome.error? ? :error : :info,
            "#{outcome.status.upcase} (#{outcome.outcome}): #{outcome.message}")
 
   notified = notify_outcome(torrent, outcome)
