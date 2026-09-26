@@ -117,6 +117,16 @@ Two more selects in the filter bar, applied on top of Transmission's own
 Choices are remembered per browser. "Filed" plus "Finished over a month ago"
 is the list of things that are safe to remove.
 
+### Dark mode (`javascript/extras/theme.js`, `style/dark.css`)
+
+Follows the system's colour scheme by default. The new footer button (◐)
+cycles through follow the system, dark and light, and remembers the choice
+per browser. Only colours are overridden: upstream's icons are inverted where
+they sit on light buttons, progress bars keep their fills, dialogs and the
+preferences window pick up dark jQuery UI colours. macOS 10.13 itself has no
+dark mode, so on the Mac's own browser use the toggle; phones and newer
+laptops switch automatically.
+
 The same directory can also replace the UI Transmission serves itself on port
 9091: Transmission looks in `~/Library/Application Support/Transmission/web`
 before its own bundle, so a symlink there makes both addresses show the
