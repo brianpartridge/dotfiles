@@ -39,3 +39,15 @@ ul.torrent_list li.torrent a.transfer_badge.other { background: #8d8c85; }
 ul.torrent_list li.torrent a.transfer_badge.error,
 ul.torrent_list li.torrent a.transfer_badge.unhandled { background: #d03b3b; }
 ul.torrent_list li.torrent a.transfer_badge:hover { filter: brightness(1.1); }
+
+/* Extra filters (javascript/extras/filters.js) */
+#statusbar #filter select.extra-filter { margin-left: 4px; }
+@media only screen and (max-device-width: 480px) {
+  /* Two lines: Show / tracker / count, then the extra filters. Fixed height,
+     so the list below can start at a known offset. */
+  #statusbar { height: 48px; }
+  #statusbar #filter { line-height: 24px; }
+  #statusbar #filter #extra-filters { float: left; clear: left; }
+  #statusbar #filter select { max-width: 150px; font-size: 12px; }
+  body div#torrent_container { top: 93px; }
+}

@@ -45,8 +45,8 @@
             url: DATA_URL,
             dataType: 'json',
             cache: false,
-            success: function (d) { data = d; loaded = true; sync(); },
-            error: function () { data = null; loaded = true; sync(); }
+            success: function (d) { data = d; loaded = true; sync(); $(document).trigger('transfers:updated'); },
+            error: function () { data = null; loaded = true; sync(); $(document).trigger('transfers:updated'); }
         });
     }
 
@@ -123,6 +123,13 @@
             return result;
         };
     }
+
+    // For other extras (filters.js): how a torrent was handled, or null.
+    window.TransfersExtra = {
+        classify: function (torrent) { return classify(torrent, Math.floor(Date.now() / 1000)); },
+        hasRecord: function (torrent) { return recordFor(torrent) !== null; },
+        isLoaded: function () { return loaded; }
+    };
 
     $(function () {
         load();

@@ -74,14 +74,16 @@ module Mock
 
   TORRENTS = [
     torrent(1, 'Some.Show.S03E07.720p.WEB.h264-GRP', 1_450_000_000, 1.0, 6, up: 120_000),
-    torrent(2, 'Big.Movie.2023.2160p.WEB-DL-GRP', 12_000_000_000, 0.42, 4, down: 3_500_000, up: 40_000),
+    torrent(2, 'Big.Movie.2023.2160p.WEB-DL-GRP', 12_000_000_000, 0.42, 4, down: 3_500_000, up: 40_000, age: 1800),
     torrent(3, 'Great.Film.2001.1080p.BluRay-GRP', 8_000_000_000, 1.0, 6, done_ago: 7200),
     torrent(4, 'Some.Show.S02.720p.HDTV-GRP', 6_000_000_000, 1.0, 6, done_ago: 86_400),
     torrent(5, 'Concert.Bootleg.FLAC-GRP', 900_000_000, 1.0, 6, done_ago: 5000),
     torrent(6, 'Quiet.Failure.S01E04.1080p.WEB-GRP', 2_100_000_000, 1.0, 6, done_ago: 9000),
     torrent(7, 'Other.Show.S01E01.1080p.WEB-GRP', 1_900_000_000, 1.0, 0, done_ago: 4000),
     torrent(8, 'Ancient.Thing.2010-GRP', 700_000_000, 1.0, 0, done_ago: 30 * 86_400, age: 31 * 86_400),
-    torrent(9, 'Stalled.Thing.S02E01-GRP', 900_000_000, 0.0, 4, error: 3, error_string: 'No data found! Ensure your drives are connected')
+    torrent(9, 'Stalled.Thing.S02E01-GRP', 900_000_000, 0.0, 4, error: 3, error_string: 'No data found! Ensure your drives are connected'),
+    torrent(10, 'Last.Week.Show.S05E02.720p-GRP', 1_200_000_000, 1.0, 6, done_ago: 9 * 86_400, age: 10 * 86_400),
+    torrent(11, 'Old.Movie.1999.720p.BluRay-GRP', 4_000_000_000, 1.0, 0, done_ago: 40 * 86_400, age: 41 * 86_400)
   ].freeze
 
   def self.record(id, status, outcome, message, destination = nil)
@@ -96,7 +98,9 @@ module Mock
       record(3, 'ok', 'movie', 'Linked Great.Film.2001.1080p.BluRay-GRP.mkv into /Users/theater/Media/movies', '/Users/theater/Media/movies/Great.Film.2001.1080p.BluRay-GRP.mkv'),
       record(4, 'ok', 'tv', 'Linked 8 of 9 media files (tv) into /Users/theater/Media/tv; skipped: extras.mkv', '/Users/theater/Media/tv'),
       record(5, 'other', 'no_media', 'No media files among 14 files'),
-      record(7, 'error', 'error', 'RuntimeError: Destination directory is missing (volume not mounted?): /Users/theater/Media/tv')
+      record(7, 'error', 'error', 'RuntimeError: Destination directory is missing (volume not mounted?): /Users/theater/Media/tv'),
+      record(10, 'ok', 'tv', 'Linked Last.Week.Show.S05E02.720p-GRP.mkv into /Users/theater/Media/tv', '/Users/theater/Media/tv/Last.Week.Show.S05E02.720p-GRP.mkv'),
+      record(11, 'ok', 'movie', 'Linked Old.Movie.1999.720p.BluRay-GRP.mkv into /Users/theater/Media/movies', '/Users/theater/Media/movies/Old.Movie.1999.720p.BluRay-GRP.mkv')
     ].to_h,
     'by_name' => {}
   }.freeze

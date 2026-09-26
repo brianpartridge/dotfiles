@@ -103,6 +103,20 @@ badge. Clicking a badge opens the transfers dashboard. The data is
 dashboard page (the latest record per torrent, keyed by hash and by name),
 refreshed every minute by the page.
 
+### Extra filters (`javascript/extras/filters.js`)
+
+Two more selects in the filter bar, applied on top of Transmission's own
+"Show", tracker and text filters:
+
+- **Handling**: Any, Filed, Filed: TV, Filed: Movie, Other, Failed, Not
+  handled, No record. Uses the same classification as the badges.
+- **Age**: Any, Added today / this week / this month, Added over a month ago,
+  Finished over a week / a month ago. "Finished" uses Transmission's
+  completion time, so unfinished torrents never match those.
+
+Choices are remembered per browser. "Filed" plus "Finished over a month ago"
+is the list of things that are safe to remove.
+
 The same directory can also replace the UI Transmission serves itself on port
 9091: Transmission looks in `~/Library/Application Support/Transmission/web`
 before its own bundle, so a symlink there makes both addresses show the
