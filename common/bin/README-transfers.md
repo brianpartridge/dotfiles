@@ -84,7 +84,7 @@ Notifications you will get:
   volume not mounted, copy failed, `unrar` missing or failing, a real file in
   the way of a movie symlink, or a crash.
 - **Nightly digest** at 21:00 with counts for the day, plus any torrent that
-  Transmission says is complete but that has no record. The digest is sent even
+  Transmission says completed in the last 7 days but that has no record. The digest is sent even
   when nothing happened: if it stops arriving, the pipeline itself is broken.
 
 ## Where to look when something is off
@@ -92,7 +92,7 @@ Notifications you will get:
 | Symptom | Look at |
 |---|---|
 | Notification says failed | The record's Details on the dashboard: error, backtrace, and a `Re-run` command you can paste into a terminal. |
-| Dashboard lists "complete but unhandled" | `~/logs/torrent-finished.out`. If there is no entry for that torrent, Transmission never ran the script (check the preference and that the `.sh` is executable). If there is an entry but it stops short, that output is the crash. |
+| Dashboard lists "complete but unhandled" (torrents that finished in the last 7 days with no record) | `~/logs/torrent-finished.out`. If there is no entry for that torrent, Transmission never ran the script (check the preference and that the `.sh` is executable). If there is an entry but it stops short, that output is the crash. |
 | No notifications at all | `~/logs/torrent-finished.out` will contain `[notify] ...` lines explaining why (missing config, HTTP error). |
 | Dashboard shows "Transmission unreachable" | Remote access is off, or `transmission.json` is wrong. Everything else still works. |
 | Nightly digest missing | `launchctl list | grep transfers` and `~/logs/transfers-digest.out`. |

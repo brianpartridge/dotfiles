@@ -21,6 +21,7 @@ module TransferDashboard
   RECENT_LIMIT = 200
   DAY = 24 * 60 * 60
   WEEK = 7 * DAY
+  UNHANDLED_WINDOW = WEEK # how far back to look for complete-but-unhandled torrents
 
   STATUS_LABELS = {
     'ok' => 'OK',
@@ -70,7 +71,9 @@ module TransferDashboard
 
     # Torrents Transmission reports as complete that have no transfer record,
     # meaning the done-script never ran (or never got as far as recording).
-    def unhandled
+    # Limited to torrents that finished within `window` seconds, so that
+    # everything downloaded before this pipeline existed is not flagged forever.
+    def unhandled(window: UNHANDLED_WINDOW)
       hashes = Set.new
       names = Set.new
       @records.each do |r|
@@ -78,7 +81,18 @@ module TransferDashboard
         hashes << torrent['hash'].to_s.downcase unless torrent['hash'].to_s.empty?
         names << torrent['name'] unless torrent['name'].to_s.empty?
       end
-      completed.reject { |t| hashes.include?(t['hashString'].to_s.downcase) || names.include?(t['name']) }
+      cutoff = @generated_at - window
+      completed
+        .select { |t| Report.finished_at(t) >= cutoff }
+        .reject { |t| hashes.include?(t['hashString'].to_s.downcase) || names.include?(t['name']) }
+    end
+
+    # When Transmission finished the torrent. A torrent added already complete
+    # has no doneDate, so fall back to when it was added.
+    def self.finished_at(torrent)
+      epoch = torrent['doneDate'].to_i
+      epoch = torrent['addedDate'].to_i if epoch.zero?
+      Time.at(epoch)
     end
 
     def completed
@@ -127,7 +141,7 @@ module TransferDashboard
     lines << "(no transfers in the last #{hours}h)" if lines.empty?
     unless unhandled.empty?
       lines << ''
-      lines << "#{unhandled.count} complete in Transmission with no record:"
+      lines << "#{unhandled.count} complete in Transmission (last #{UNHANDLED_WINDOW / DAY} days) with no record:"
       unhandled.first(5).each { |t| lines << "• #{t['name']}" }
     end
     lines << '' << "Transmission unreachable: #{report.rpc_error}" if report.rpc_error
@@ -171,7 +185,7 @@ module TransferDashboard
 
       unhandled = @report.unhandled
       unless unhandled.empty?
-        out << '' << "UNHANDLED (complete in Transmission, no record):"
+        out << '' << "UNHANDLED (complete in Transmission in the last #{UNHANDLED_WINDOW / DAY} days, no record):"
         unhandled.each { |t| out << "  #{t['name']}" }
       end
 
@@ -348,7 +362,7 @@ module TransferDashboard
           <div class="tile ok"><div class="label">Filed OK, 7 days</div><div class="value"><%= week['ok'] %></div></div>
           <div class="tile attn"><div class="label">Needs attention, 7 days</div><div class="value"><%= week['warning'] %></div></div>
           <div class="tile fail"><div class="label">Failed, 7 days</div><div class="value"><%= week['error'] %></div></div>
-          <div class="tile <%= unhandled.empty? ? '' : 'fail' %>"><div class="label">Complete but unhandled</div><div class="value"><%= @report.rpc_error ? '?' : unhandled.count %></div></div>
+          <div class="tile <%= unhandled.empty? ? '' : 'fail' %>"><div class="label">Complete but unhandled, <%= UNHANDLED_WINDOW / DAY %> days</div><div class="value"><%= @report.rpc_error ? '?' : unhandled.count %></div></div>
         </section>
 
         <%- if @report.rpc_error -%>
@@ -360,7 +374,7 @@ module TransferDashboard
         <%- end -%>
 
         <%- unless unhandled.empty? -%>
-        <h2>Complete in Transmission, never handled</h2>
+        <h2>Complete in Transmission in the last <%= UNHANDLED_WINDOW / DAY %> days, never handled</h2>
         <div class="notice critical">These finished downloading but no transfer record exists, so the done-script did not run or crashed before recording. Re-run it with the <code>repro</code> command from a similar record, or check <code>~/logs/torrent-finished.out</code>.</div>
         <ul class="list">
           <%- unhandled.each do |t| -%>

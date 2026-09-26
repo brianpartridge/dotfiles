@@ -58,6 +58,15 @@ describe TransferDashboard do
       expect(r.completed.count).to eq(4)
     end
 
+    it 'ignores complete torrents older than the unhandled window' do
+      old_done = torrent('Ancient.Thing', 'old1', done_at: now - 8 * 86_400)
+      added_long_ago = torrent('Verified.Later', 'old2', done_at: now - 30 * 86_400).merge('doneDate' => 0)
+      fresh_no_done_date = torrent('Added.Complete', 'new1', done_at: now - 3600).merge('doneDate' => 0)
+      r = build(records: [], torrents: [old_done, added_long_ago, fresh_no_done_date, torrent('Recent', 'new2')])
+      expect(r.unhandled.map { |t| t['name'] }).to eq(%w[Recent Added.Complete])
+      expect(r.unhandled(window: 365 * 86_400).count).to eq(4)
+    end
+
     it 'survives an unreachable Transmission' do
       r = build(records: records, rpc_error: 'Errno::ECONNREFUSED')
       expect(r.rpc_error).to match(/ECONNREFUSED/)
@@ -72,7 +81,7 @@ describe TransferDashboard do
         r = build(records: records, torrents: [torrent('Never.Handled', 'ddd'), torrent('Dl', 'e', done: 0.5, status: 4)])
         expect { TransferDashboard.generate(report: r, output: out) }.to output(/Wrote/).to_stdout
         html = File.read(out)
-        expect(html).to include('Show.S01E01', 'Never.Handled', 'never handled', 'In progress', '50%')
+        expect(html).to include('Show.S01E01', 'Never.Handled', 'last 7 days, never handled', 'unhandled, 7 days', 'In progress', '50%')
         expect(html).to include('RuntimeError: missing', 'env ... ruby x')
         expect(html).not_to include('<script')
         expect(File.exist?("#{out}.tmp")).to be false
