@@ -1,15 +1,19 @@
 # Transmission web UI, served by Apache
 
-A copy of the web UI that Transmission.app serves on port 9091, hosted by the
-Mac's built-in Apache instead, and talking to the same Transmission through an
-RPC proxy. Because the copy lives in this repository, it can be changed and
-extended here without touching Transmission itself.
+The web UI that Transmission 2.93 serves on port 9091, kept in this
+repository under `transmission/`, deployed to the Mac's built-in Apache, and
+talking to the same Transmission through an RPC proxy. Because the copy lives
+here, it can be changed and extended without touching Transmission itself.
 
-    Browser ──▶ Apache :80 ── /transmission/web/*  ──▶ files in common/web/transmission
+    Browser ──▶ Apache :80 ── /transmission/web/*  ──▶ /Library/WebServer/Documents/transmission/web
                            └─ /transmission/rpc    ──▶ proxy ──▶ Transmission :9091
 
 The UI calls the RPC at the relative path `../rpc`, so as long as it is served
 from `/transmission/web/`, the only server-side piece is the proxy rule.
+
+`transmission/UPSTREAM` records where the files came from (the `web/` tree at
+Transmission's `2.93` tag, verbatim apart from the autotools `Makefile.am`
+files). `transmission/LICENSE` is upstream's GPL v2.
 
 ## Setup (once)
 
@@ -18,25 +22,33 @@ from `/transmission/web/`, the only server-side piece is the proxy rule.
    addresses" alone. The proxy talks to Transmission as `127.0.0.1`, which
    its hostname whitelist always accepts.
 
-2. Import the UI out of the app bundle into this repo, then commit it:
+2. Give yourself a place under Apache's document root:
 
-       ~/bin/transmission-web-import.sh            # /Applications/Transmission.app
-       git -C ~/dotfiles add common/web/transmission
-       git -C ~/dotfiles commit -m "Import Transmission web UI"
+       sudo mkdir -p /Library/WebServer/Documents/transmission
+       sudo chown $USER /Library/WebServer/Documents/transmission
 
-   The import records the version in `common/web/transmission/UPSTREAM`.
-
-3. Install the Apache config and reload:
+3. Install the Apache config and reload. Apache must already be running
+   (`sudo apachectl start`, and
+   `sudo launchctl load -w /System/Library/LaunchDaemons/org.apache.httpd.plist`
+   to survive reboots; the transfers dashboard setup does the same).
 
        sudo cp ~/dotfiles/common/conf/apache/transmission.conf /etc/apache2/other/
        sudo apachectl configtest
        sudo apachectl graceful
 
-   Apache must already be running (`sudo apachectl start`, and
-   `sudo launchctl load -w /System/Library/LaunchDaemons/org.apache.httpd.plist`
-   to survive reboots; the transfers dashboard setup does the same).
+4. Deploy and open `http://<mac-name>.local/transmission/`:
 
-4. Open `http://<mac-name>.local/transmission/` from any device on the network.
+       ~/bin/transmission-web-deploy.sh
+
+## Day to day
+
+Edit files under `common/web/transmission/`, then:
+
+    ~/bin/transmission-web-deploy.sh
+
+The deploy copies the tree into place with an atomic swap, writes a
+`DEPLOYED` file naming the commit it came from (and whether the tree had
+uncommitted changes), and prints the two HTTP checks below.
 
 ## Checking it works
 
@@ -45,22 +57,16 @@ from `/transmission/web/`, the only server-side piece is the proxy rule.
     curl -si -X POST http://localhost/transmission/rpc | head -1      # 409 from Transmission (session id handshake)
 
 A 409 on the last one is correct: it proves the proxy reached Transmission.
-A 503 means Transmission's remote access is off or on another port. A 403 on
-the second means Apache's `_www` user cannot read the checkout; check
-`ls -ld ~ ~/dotfiles ~/dotfiles/common/web`.
+A 503 means Transmission's remote access is off or on another port. A 404 on
+the second means nothing has been deployed yet.
 
 ## Extending it
 
-Edit the files under `common/web/transmission/` and reload the page; Apache
-serves them directly from the checkout. Transmission 3.x ships plain HTML,
-CSS and jQuery, so changes are straightforward. Transmission 4.x ships a built
-bundle (`transmission-app.js`); it still hosts fine, but meaningful changes
-mean building from the `web/` sources in Transmission's repository and
-importing the output.
-
-To upgrade after a new Transmission release, run the import again. It refuses
-to run over uncommitted changes, and afterwards `git diff` shows upstream's
-changes against any customisations, to be merged or reverted as needed.
+Transmission 2.93's UI is plain HTML, CSS and jQuery: `transmission/index.html`,
+`transmission/javascript/*.js` (`transmission.js` is the application,
+`remote.js` the RPC client, `torrent-row.js` the list rows, `inspector.js` the
+details pane) and `transmission/style/transmission/*.css`. Commit changes here
+like any other file.
 
 The same directory can also replace the UI Transmission serves itself on port
 9091: Transmission looks in `~/Library/Application Support/Transmission/web`
@@ -68,6 +74,16 @@ before its own bundle, so a symlink there makes both addresses show the
 customised copy.
 
     ln -s ~/dotfiles/common/web/transmission ~/Library/Application\ Support/Transmission/web
+
+## Upgrading the upstream copy
+
+If Transmission is ever upgraded, bring in the matching `web/` tree so the UI
+and the daemon agree, then re-apply local changes from the diff:
+
+    git clone --depth 1 --branch <tag> https://github.com/transmission/transmission /tmp/tr
+    rm -rf ~/dotfiles/common/web/transmission && cp -R /tmp/tr/web ~/dotfiles/common/web/transmission
+    find ~/dotfiles/common/web/transmission -name Makefile.am -delete
+    # update transmission/UPSTREAM, then `git diff` shows upstream's changes against yours
 
 ## Exposure
 
