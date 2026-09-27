@@ -119,6 +119,8 @@ Two more selects in the filter bar, applied on top of Transmission's own
 Choices are remembered per browser. "Filed" plus "Finished over a month ago"
 is the list of things that are safe to remove.
 
+The footer also gains a ▤ button that opens the transfers dashboard.
+
 ### Dark mode (`javascript/extras/theme.js`, `style/dark.css`)
 
 Follows the system's colour scheme by default. The new footer button (◐)

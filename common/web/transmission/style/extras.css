@@ -56,15 +56,25 @@ ul.torrent_list li.torrent a.transfer_badge:hover { filter: brightness(1.1); }
   body div#torrent_container { top: 93px; }
 }
 
-/* Theme toggle (javascript/extras/theme.js): a footer button like upstream's, with a glyph instead of an icon. */
-div.torrent_footer > div#theme-button {
+/* Extra footer buttons (theme toggle, dashboard link): like upstream's, with a glyph instead of an icon. */
+div.torrent_footer > .extra-footer-button {
+  float: left;
+  margin: 2px 4px;
+  width: 18px;
+  height: 12px;
+  padding: 2px 8px;
+  border: 1px solid #888;
+  border-radius: 5px;
   background-color: #dddddd;
   background-image: none;
-  border-radius: 5px;
   font-size: 13px;
   line-height: 12px;
   text-align: center;
   color: #222;
+  text-decoration: none;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
-html.dark div.torrent_footer > div#theme-button { filter: none; background-color: #3a3a39; border-color: #666; color: #eee; }
+div.torrent_footer > a.extra-footer-button { position: static; right: auto; top: auto; }
+html.dark div.torrent_footer > .extra-footer-button { filter: none; background-color: #3a3a39; border-color: #666; color: #eee; }

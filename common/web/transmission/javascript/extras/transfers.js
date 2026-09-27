@@ -169,7 +169,30 @@
         isLoaded: function () { return loaded; }
     };
 
+    // A footer button to the transfers dashboard, next to upstream's buttons.
+    function addDashboardButton() {
+        var footer = $('div.torrent_footer');
+        if (!footer.length || document.getElementById('dashboard-button')) { return; }
+        var button = document.createElement('a');
+        button.id = 'dashboard-button';
+        button.className = 'extra-footer-button';
+        button.href = '/transfers/';
+        button.target = '_blank';
+        button.rel = 'noopener';
+        button.title = 'Transfers dashboard';
+        button.textContent = '\u25A4'; // ▤
+        var after = $('#theme-button');
+        (after.length ? after : $('#compact-button')).after(button);
+    }
+
+    function updateDashboardButton() {
+        var button = document.getElementById('dashboard-button');
+        if (button && data && data.dashboard_url) { button.href = data.dashboard_url; }
+    }
+
     $(function () {
+        addDashboardButton();
+        $(document).on('transfers:updated', updateDashboardButton);
         load();
         setInterval(load, REFRESH_MS);
         setInterval(sync, 5000); // catches rows updated in place between refilters
