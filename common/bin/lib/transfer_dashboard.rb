@@ -12,8 +12,8 @@ require_relative 'transfer_log'
 require_relative 'transmission_rpc'
 
 # Builds the transfers dashboard: a single static HTML page served by the
-# Mac's built-in Apache (see README-transfers.md), a plain-text version for
-# the terminal, and a daily Pushover digest that links to the page.
+# Mac's built-in Apache (see README-transfers.md) and a plain-text version
+# for the terminal.
 #
 # Besides the transfer log it asks Transmission which torrents are complete,
 # so that a torrent that finished without the done-script ever running (the
@@ -123,8 +123,8 @@ module TransferDashboard
 
   module_function
 
-  # Where the page can be opened from another device. Override with
-  # $TRANSFER_DASHBOARD_URL when it is served from somewhere else.
+  # Where the page can be opened from another device; notifications link to
+  # it. Override with $TRANSFER_DASHBOARD_URL when it is served from elsewhere.
   def url
     return ENV['TRANSFER_DASHBOARD_URL'] unless ENV['TRANSFER_DASHBOARD_URL'].to_s.empty?
 
@@ -179,31 +179,6 @@ module TransferDashboard
   def text(report = nil, limit: 25)
     report ||= Report.new
     Text.new(report, limit: limit).render
-  end
-
-  # Sends a Pushover summary of the last `window` seconds. Sent even when
-  # nothing happened, so a quiet day and a dead pipeline look different.
-  def digest(report = nil, window: DAY)
-    report ||= Report.new
-    counts = report.counts(window)
-    unhandled = report.unhandled
-    hours = (window / 3600).round
-
-    title = "Transfers, last #{hours}h: #{counts['ok']} filed, #{counts['other']} other, #{counts['error']} failed"
-    lines = report.records_since(window).first(10).map do |r|
-      "#{status_glyph(r['status'])} #{torrent_name(r)}"
-    end
-    lines << "(no transfers in the last #{hours}h)" if lines.empty?
-    unless unhandled.empty?
-      lines << ''
-      lines << "#{unhandled.count} complete in Transmission (last #{UNHANDLED_WINDOW / DAY} days) with no record:"
-      unhandled.first(5).each { |t| lines << "• #{t['name']}" }
-    end
-    lines << '' << "Transmission unreachable: #{report.rpc_error}" if report.rpc_error
-
-    trouble = counts['error'].positive? || !unhandled.empty? || report.rpc_error
-    Notify.push(lines.join("\n"), title: title, priority: trouble ? :high : :low,
-                                   url: url, url_title: 'Open the dashboard')
   end
 
   def status_glyph(status)

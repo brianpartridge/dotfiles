@@ -14,8 +14,8 @@ about it, and how to see what happened to recent transfers.
 | `lib/transfer_log.rb` | Append-only JSONL record of every run: `~/logs/transfers.jsonl`. The dashboard reads this, not the text log. |
 | `lib/notify.rb` | Pushover client. Never raises. `lib/tweet.rb` now delegates here, so `tvrss.rb` and `wishlist-downloader.rb` notify too. |
 | `lib/transmission_rpc.rb` | Asks Transmission which torrents exist and whether they are complete. |
-| `lib/transfer_dashboard.rb`, `transfers-dashboard.rb` | Static HTML dashboard, terminal view, daily digest. |
-| `../../home-server/Library/LaunchAgents/*.plist` | Regenerate the dashboard every 30 minutes; send the digest nightly. |
+| `lib/transfer_dashboard.rb`, `transfers-dashboard.rb` | Static HTML dashboard and terminal view. |
+| `../../home-server/Library/LaunchAgents/*.plist` | Regenerate the dashboard every 30 minutes. |
 
 ## One-time setup
 
@@ -44,13 +44,12 @@ about it, and how to see what happened to recent transfers.
        { "url": "http://localhost:9091/transmission/rpc", "username": "...", "password": "..." }
        EOF
 
-4. **Launch agents.** After `stow home-server` the plists are symlinked into
-   `~/Library/LaunchAgents`. Load them once:
+4. **Launch agent.** After `stow home-server` the plist is symlinked into
+   `~/Library/LaunchAgents`. Load it once:
 
        launchctl load ~/Library/LaunchAgents/com.brianpartridge.transfers-dashboard.plist
-       launchctl load ~/Library/LaunchAgents/com.brianpartridge.transfers-digest.plist
 
-   If launchd refuses a symlinked plist, copy the files instead of stowing them.
+   If launchd refuses a symlinked plist, copy the file instead of stowing it.
 
 5. **Serve the dashboard with the Mac's built-in Apache.** macOS 10.13 ships
    Apache 2.4; this turns it on, keeps it running across reboots, and gives
@@ -63,10 +62,10 @@ about it, and how to see what happened to recent transfers.
 
    The dashboard is written to `/Library/WebServer/Documents/transfers/index.html`
    by default and is reachable from any device on your network at
-   `http://<mac-name>.local/transfers/`. The nightly digest carries that link.
+   `http://<mac-name>.local/transfers/`. Notifications link to that address.
    Check the name with `scutil --get LocalHostName`; if the page should be
-   reached at some other address, set `TRANSFER_DASHBOARD_URL` in the digest
-   launch agent. To write the page somewhere else entirely, set
+   reached at some other address, set `TRANSFER_DASHBOARD_URL` in
+   `torrent-finished.sh`. To write the page somewhere else entirely, set
    `TRANSFER_DASHBOARD` or use `transfers-dashboard.rb --out PATH`.
 
    Anyone on your network can open the page, and it lists file names and
@@ -77,10 +76,10 @@ about it, and how to see what happened to recent transfers.
 Everything here runs on the macOS system Ruby (2.3), so `./bin/transfers-dashboard.rb`
 works from any shell. The exception is talking to Pushover: the system Ruby's
 OpenSSL is too old for modern TLS, so notifications need Homebrew's Ruby. The
-Transmission wrapper and the launch agents put `/usr/local/bin` first on `PATH`
+Transmission wrapper and the launch agent put `/usr/local/bin` first on `PATH`
 for that reason. For a manual test, call it explicitly:
 
-    /usr/local/bin/ruby ~/bin/transfers-dashboard.rb --digest
+    cd ~/bin && /usr/local/bin/ruby -r ./lib/notify -e 'p Notify.push("hello", title: "Transfers")'
 
 ## Why hardlinks
 
@@ -104,7 +103,6 @@ Dangling symlinks (target already gone) are reported and left alone.
     transfers-dashboard.rb            # regenerate the HTML
     transfers-dashboard.rb --text     # last 25 transfers in the terminal
     transfers-dashboard.rb --text 100
-    transfers-dashboard.rb --digest   # send the 24h summary now
 
 Notifications you will get:
 
@@ -147,9 +145,6 @@ Notifications you will get:
 - **Transfer failed** (high priority) when something went wrong: destination
   volume not mounted, copy failed, `unrar` missing or failing, a real file in
   the way of a movie symlink, or a crash.
-- **Nightly digest** at 21:00 with counts for the day, plus any torrent that
-  Transmission says completed in the last 7 days but that has no record. The digest is sent even
-  when nothing happened: if it stops arriving, the pipeline itself is broken.
 
 ## Where to look when something is off
 
@@ -160,7 +155,6 @@ Notifications you will get:
 | No notifications at all | `~/logs/torrent-finished.out` will contain `[notify] ...` lines explaining why (missing config, HTTP error). |
 | Dashboard 404s or is not reachable | `sudo apachectl status` or `curl -I http://localhost/transfers/` on the Mac; make sure the launch daemon was loaded with `-w` so Apache survives a reboot. |
 | Dashboard shows "Transmission unreachable" | Remote access is off, or `transmission.json` is wrong. Everything else still works. |
-| Nightly digest missing | `launchctl list | grep transfers` and `~/logs/transfers-digest.out`. |
 
 Logs:
 

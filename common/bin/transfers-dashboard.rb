@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Regenerates the transfers dashboard, prints it to the terminal, or sends
-# the daily Pushover digest. See README-transfers.md.
+# Regenerates the transfers dashboard or prints it to the terminal.
+# See README-transfers.md.
 
 require 'optparse'
 require_relative 'lib/transfer_dashboard'
@@ -13,15 +13,12 @@ OptionParser.new do |opts|
     Usage: transfers-dashboard.rb [options]
 
     With no options, regenerates the HTML dashboard (default #{TransferDashboard::DEFAULT_OUTPUT},
-    override with --out or $TRANSFER_DASHBOARD). The digest links to #{TransferDashboard.url}
+    override with --out or $TRANSFER_DASHBOARD). Notifications link to #{TransferDashboard.url}
     (override with $TRANSFER_DASHBOARD_URL).
   USAGE
   opts.on('-t', '--text [N]', Integer, 'Print the last N transfers (default 25) instead of writing HTML') do |n|
     options[:mode] = :text
     options[:limit] = n if n
-  end
-  opts.on('-d', '--digest', 'Send a Pushover summary of the last 24h, then regenerate the HTML') do
-    options[:mode] = :digest
   end
   opts.on('-o', '--out PATH', 'Where to write the HTML') { |p| options[:out] = p }
   opts.on('-q', '--quiet', 'Do not print the output path') { options[:quiet] = true }
@@ -35,11 +32,6 @@ report = TransferDashboard::Report.new
 case options[:mode]
 when :text
   puts TransferDashboard.text(report, limit: options[:limit])
-when :digest
-  sent = TransferDashboard.digest(report)
-  TransferDashboard.generate(report: report, output: options[:out], quiet: options[:quiet])
-  puts(sent ? 'Digest sent' : 'Digest NOT sent (see stderr)') unless options[:quiet]
-  exit(sent ? 0 : 1)
 else
   TransferDashboard.generate(report: report, output: options[:out], quiet: options[:quiet])
 end

@@ -159,42 +159,6 @@ describe TransferDashboard do
     end
   end
 
-  describe '.digest' do
-    around do |example|
-      @sent = []
-      Notify.transport = ->(p) { @sent << p; FakeResponse.new('200', '') }
-      with_tmpdir do |dir|
-        conf = File.join(dir, 'p.json')
-        File.write(conf, '{"token":"t","user":"u"}')
-        Notify.config_path = conf
-        example.run
-      end
-    ensure
-      Notify.transport = nil
-      Notify.config_path = nil
-    end
-
-    it 'sends a low-priority summary on a quiet day' do
-      expect(TransferDashboard.digest(build(records: []))).to be true
-      expect(@sent.last['title']).to eq('Transfers, last 24h: 0 filed, 0 other, 0 failed')
-      expect(@sent.last['message']).to include('no transfers')
-      expect(@sent.last['priority']).to eq(-1)
-    end
-
-    it 'links to the dashboard' do
-      TransferDashboard.digest(build(records: []))
-      expect(@sent.last['url']).to eq(TransferDashboard.url)
-      expect(@sent.last['url_title']).to eq('Open the dashboard')
-    end
-
-    it 'sends high priority when something is unhandled' do
-      r = build(records: records, torrents: [torrent('Never.Handled', 'ddd')])
-      TransferDashboard.digest(r)
-      expect(@sent.last['priority']).to eq(1)
-      expect(@sent.last['message']).to include('✓ Show.S01E01', 'no record', '• Never.Handled')
-    end
-  end
-
   describe '.url' do
     it 'derives a Bonjour address from the hostname' do
       allow(Socket).to receive(:gethostname).and_return('theater-mac')
