@@ -93,7 +93,7 @@ processed it:
 | Badge | Meaning |
 |---|---|
 | **TV**, **Movie** (green) | filed for Plex; hover for the destination |
-| **eBook**, **Comic**, **Audiobook**, **Music** (blue-grey) | recognised, recorded, not filed anywhere |
+| **eBook**, **Comic**, **Audiobook**, **Music** (blue-grey) | recognised and recorded; hover shows whether it was copied into `~/Dropbox/media` or is waiting for `--file-other` |
 | **Other** (grey) | finished fine, nothing to file: not TV or a movie, no media files, or nothing usable in an archive |
 | **Failed** (red) | the handler hit an error; hover for the message |
 | **Not handled** (red) | completed in the last 7 days but the script left no record, so it never ran or crashed before recording |

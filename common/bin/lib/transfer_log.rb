@@ -15,7 +15,7 @@ require 'time'
 #               (recognised, not filed) | "no_media" | "multiple_media" |
 #               "unknown_media" | "error" | "no_torrent"
 #   action      "link" (hardlink) | "symlink" (different volume) | "extract_link" |
-#               "extract_symlink" | "none"
+#               "extract_symlink" | "copy" (eBooks, comics, audiobooks, music) | "none"
 #   message     human readable summary
 #   media_file  path of the file that was filed (the torrent directory for a set)
 #   destination the link that was created (its directory for a set)
@@ -24,6 +24,8 @@ require 'time'
 #   duration_s  seconds the handler took
 #   notified    whether the Pushover notification was accepted
 #   repro       command line to re-run the handler for this torrent
+#   file_command for a recognised-but-unfiled eBook/comic/audiobook/music
+#               download, the command that copies it into place
 class TransferLog
   DEFAULT_PATH = '~/logs/transfers.jsonl'
   STATUSES = %w[ok other error].freeze

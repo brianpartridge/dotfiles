@@ -26,6 +26,18 @@ $stdout.sync = true # keep stdout and stderr in order in the wrapper's capture f
 MEDIA_ROOT = '/Users/theater/Media'
 TV_DIRECTORY = File.join(MEDIA_ROOT, 'tv')
 MOVIE_DIRECTORY = File.join(MEDIA_ROOT, 'movies')
+# Where eBooks, comics, audiobooks and music go. They are copied (not linked)
+# only when this script runs with --file-other; by default they are recorded
+# and the command to file them later is included in the notification, the log
+# and the dashboard.
+DROPBOX_MEDIA = File.expand_path(ENV['DROPBOX_MEDIA'] || '~/Dropbox/media')
+OTHER_DIRECTORIES = {
+  'comic' => File.join(DROPBOX_MEDIA, 'comics'),
+  'ebook' => File.join(DROPBOX_MEDIA, 'ebooks'),
+  'audiobook' => File.join(DROPBOX_MEDIA, 'audiobooks'),
+  'music' => File.join(DROPBOX_MEDIA, 'music')
+}.freeze
+FILE_OTHER_FLAG = '--file-other'
 LOG_FILE = ENV['TORRENT_FINISHED_LOG'] || '~/logs/torrent-finished.log'
 LOG_FILES = 10
 LOG_BYTES = 10 * 1024 * 1024 # per file; the previous 1024 discarded nearly everything
@@ -61,8 +73,16 @@ class Repro
   end
 end
 
+# The command that files a recognised-but-unfiled download, or nil.
+def file_command(outcome)
+  return nil unless outcome.other? && OTHER_DIRECTORIES.key?(outcome.outcome)
+
+  "#{Repro.cmd} #{FILE_OTHER_FLAG}"
+end
+
 def notify_outcome(torrent, outcome)
   name = torrent ? torrent.name : '(unknown torrent)'
+  kind = TorrentHandler::OTHER_LABELS[outcome.outcome]
   case outcome.outcome
   when 'tv'
     Notify.push(outcome.message, title: 'TV ready')
@@ -70,23 +90,25 @@ def notify_outcome(torrent, outcome)
     Notify.push(outcome.message, title: 'Movie ready')
   when 'error', 'no_torrent'
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer failed', priority: :high)
-  when 'ebook'
-    Notify.push("#{name}\n#{outcome.message}", title: 'eBook downloaded')
-  when 'comic'
-    Notify.push("#{name}\n#{outcome.message}", title: 'Comic downloaded')
-  when 'audiobook'
-    Notify.push("#{name}\n#{outcome.message}", title: 'Audiobook downloaded')
-  when 'music'
-    Notify.push("#{name}\n#{outcome.message}", title: 'Music downloaded')
+  when 'ebook', 'comic', 'audiobook', 'music'
+    if outcome.ok?
+      Notify.push(outcome.message, title: "#{kind} filed")
+    else
+      body = "#{name}\n#{outcome.message}"
+      command = file_command(outcome)
+      body += "\n\nTo file it into #{OTHER_DIRECTORIES[outcome.outcome]}:\n#{command}" if command
+      Notify.push(body, title: "#{kind} downloaded")
+    end
   else
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer complete')
   end
 end
 
-def handle(torrent, log)
+def handle(torrent, log, file_other)
   return Outcome.error('No torrent in environment (TR_TORRENT_NAME / TR_TORRENT_DIR missing)', outcome: 'no_torrent') if torrent.nil?
 
-  TorrentHandler.new(torrent, tv_directory: TV_DIRECTORY, movie_directory: MOVIE_DIRECTORY, logger: log).run!
+  TorrentHandler.new(torrent, tv_directory: TV_DIRECTORY, movie_directory: MOVIE_DIRECTORY,
+                              other_directories: OTHER_DIRECTORIES, file_other: file_other, logger: log).run!
 rescue StandardError => e
   log.error "#{e.class}: #{e.message}\n  #{Array(e.backtrace).first(10).join("\n  ")}"
   Outcome.error("#{e.class}: #{e.message}", exception: e)
@@ -95,10 +117,11 @@ end
 def main
   log = build_logger
   started = Time.now
-  log.info "STARTING: #{Repro.cmd}"
+  file_other = ARGV.include?(FILE_OTHER_FLAG)
+  log.info "STARTING: #{Repro.cmd}#{file_other ? " #{FILE_OTHER_FLAG}" : ''}"
 
   torrent = Torrent.from_env
-  outcome = handle(torrent, log)
+  outcome = handle(torrent, log, file_other)
   duration = (Time.now - started).round(1)
   log.send(outcome.error? ? :error : :info,
            "#{outcome.status.upcase} (#{outcome.outcome}): #{outcome.message}")
@@ -109,8 +132,10 @@ def main
     'torrent' => torrent && torrent.to_h,
     'duration_s' => duration,
     'notified' => notified,
-    'repro' => Repro.cmd
+    'repro' => Repro.cmd,
+    'file_command' => file_command(outcome)
   )
+  log.info "To file it later: #{record['file_command']}" if record['file_command']
   begin
     TransferLog.new.append(record)
   rescue StandardError => e

@@ -200,12 +200,20 @@ end
 # failed); the caller turns those into an error Outcome so they are recorded
 # and notified rather than lost.
 class TorrentHandler
-  def initialize(torrent, tv_directory:, movie_directory:, logger:)
+  # other_directories maps an OtherMedia kind ('ebook', 'comic', 'audiobook',
+  # 'music') to the directory it should be copied into. Copying only happens
+  # when file_other is true; otherwise those downloads are recorded as
+  # recognised but not filed.
+  def initialize(torrent, tv_directory:, movie_directory:, logger:, other_directories: {}, file_other: false)
     @torrent = torrent
     @tv_directory = tv_directory
     @movie_directory = movie_directory
+    @other_directories = other_directories
+    @file_other = file_other
     @log = logger
   end
+
+  OTHER_LABELS = { 'ebook' => 'eBook', 'comic' => 'Comic', 'audiobook' => 'Audiobook', 'music' => 'Music' }.freeze
 
   def run!
     files = @torrent.files
@@ -250,8 +258,11 @@ class TorrentHandler
   def classify_other(files, rars, prefix = nil)
     kind, description = OtherMedia.classify(files, @torrent.name)
     if kind
-      label = { 'ebook' => 'eBook', 'comic' => 'Comic', 'audiobook' => 'Audiobook', 'music' => 'Music' }[kind]
-      return Outcome.other(kind, [prefix, "#{label}: #{description}"].compact.join('; '), media_file: @torrent.path)
+      summary = [prefix, "#{OTHER_LABELS[kind]}: #{description}"].compact.join('; ')
+      directory = @other_directories[kind]
+      return copy_other(kind, directory, summary) if @file_other && directory
+
+      return Outcome.other(kind, "#{summary}; not filed", media_file: @torrent.path)
     end
     if rars.count > 1
       return Outcome.other('multiple_media', "#{rars.count} archives and no media files; nothing to pick")
@@ -312,6 +323,32 @@ class TorrentHandler
       Outcome.other('unknown_media', "'#{by_filename ? filename : @torrent.name}' is not a TV episode or a movie",
                     media_file: path)
     end
+  end
+
+  # Copies the torrent's data as it is, a single file or the whole directory,
+  # into the kind's directory. Copied under a temporary name and renamed, so
+  # a sync client never sees a half-copied item.
+  def copy_other(kind, directory, summary)
+    parent = File.dirname(directory)
+    raise "Destination directory is missing (volume not mounted?): #{parent}" unless File.directory?(parent)
+
+    FileUtils.mkdir_p(directory)
+    source = @torrent.path
+    destination = File.join(directory, File.basename(source))
+    if File.exist?(destination)
+      @log.info "Already present, not copying: #{destination}"
+      return Outcome.ok(kind, "Already had #{File.basename(source)} in #{directory}; #{summary}",
+                        action: 'copy', media_file: source, destination: destination)
+    end
+
+    tmp = "#{destination}.copying"
+    FileUtils.rm_rf(tmp)
+    @log.info "Copying #{source} to #{destination}"
+    FileUtils.cp_r(source, tmp)
+    File.rename(tmp, destination)
+    @log.info 'Copy complete'
+    Outcome.ok(kind, "Copied #{File.basename(source)} into #{directory}; #{summary}",
+               action: 'copy', media_file: source, destination: destination)
   end
 
   def ensure_directory(directory)

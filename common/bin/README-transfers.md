@@ -8,7 +8,7 @@ about it, and how to see what happened to recent transfers.
 | File | Role |
 |---|---|
 | `torrent-finished.sh` | What Transmission calls. Fixes `PATH`, captures all output to `~/logs/torrent-finished.out`, runs the Ruby script. |
-| `torrent-finished.rb` | Hardlinks the media into the TV or movies folder (each file on its own name for season packs), records the outcome, notifies, refreshes the dashboard. Exit 1 on error. |
+| `torrent-finished.rb` | Hardlinks the media into the TV or movies folder (each file on its own name for season packs), records the outcome, notifies, refreshes the dashboard. With `--file-other`, also copies eBooks, comics, audiobooks and music into `~/Dropbox/media`. Exit 1 on error. |
 | `media-hardlinks.rb` | One-time conversion of the old symlinks in the library into hardlinks. Dry run unless `--apply`. |
 | `lib/torrent_handler.rb` | The filing logic, testable on its own. |
 | `lib/transfer_log.rb` | Append-only JSONL record of every run: `~/logs/transfers.jsonl`. The dashboard reads this, not the text log. |
@@ -123,6 +123,20 @@ Notifications you will get:
   "Part 2") means audiobook; otherwise three or more files is an audiobook
   and fewer is music. Video always wins. Tune `OtherMedia` in
   `lib/torrent_handler.rb` if a rule misfires.
+  These are not filed automatically. The notification, the log and the
+  dashboard carry the exact command that copies the download, as it is (a
+  single file or the whole directory), into `~/Dropbox/media/comics`,
+  `ebooks`, `audiobooks` or `music`:
+
+      /usr/bin/env TR_TORRENT_DIR='...' TR_TORRENT_NAME='...' ruby ~/bin/torrent-finished.rb --file-other
+
+  Run it on the Mac when you want the item. It is safe to re-run: an item
+  already present is left alone, and the copy lands under a temporary name
+  and is renamed when complete so Dropbox never syncs a partial item. To file
+  these automatically, add `--file-other` to the command in
+  `torrent-finished.sh`. Override the root with `$DROPBOX_MEDIA`.
+- **eBook / Comic / Audiobook / Music filed** when run with `--file-other` and
+  the copy succeeded.
 - **Transfer complete** when the download finished fine but there was nothing
   to file for Plex and it is none of the above: no media files, a name that is
   neither `S01E02` nor `Title.2004`, or an archive that extracted to nothing
@@ -160,7 +174,8 @@ Each line of `transfers.jsonl`:
 
     ts, status (ok|other|error), outcome (tv|movie|ebook|comic|audiobook|music|no_media|multiple_media|unknown_media|error|no_torrent),
     action (link|symlink|extract_link|extract_symlink|none), message, media_file, destination,
-    torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro
+    torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro,
+    file_command (the --file-other command for a recognised-but-unfiled download)
 
 ## Tests
 

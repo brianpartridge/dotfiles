@@ -153,7 +153,8 @@ module TransferDashboard
       torrent = r['torrent'] || {}
       entry = {
         'ts' => r['ts'], 'status' => r['status'], 'outcome' => r['outcome'],
-        'message' => r['message'], 'destination' => r['destination']
+        'message' => r['message'], 'destination' => r['destination'],
+        'file_command' => r['file_command']
       }
       hash = torrent['hash'].to_s.downcase
       name = torrent['name'].to_s
@@ -477,7 +478,7 @@ module TransferDashboard
             <div class="name"><%= h(TransferDashboard.torrent_name(r)) %></div>
             <div class="meta"><%= when_html(r) %> · <b><%= h(status_label(status)) %></b> · <%= h(outcome_label(r['outcome'])) %><%- if action_label(r) -%> · <%= h(action_label(r)) %> <%= h(File.dirname(r['destination'].to_s)) %><%- end -%></div>
             <div class="msg"><%= h(r['message']) %></div>
-            <%- if r['error'] || r['media_file'] || r['repro'] -%>
+            <%- if r['error'] || r['media_file'] || r['repro'] || r['file_command'] -%>
             <details>
               <summary>Details</summary>
               <%- if r['media_file'] -%><div>Media file: <code><%= h(r['media_file']) %></code></div><%- end -%>
@@ -485,6 +486,7 @@ module TransferDashboard
               <%- if r['duration_s'] -%><div>Took <%= h(r['duration_s']) %>s<%- if r.key?('notified') -%>, notification <%= r['notified'] ? 'sent' : 'not sent' %><%- end -%></div><%- end -%>
               <%- if r['error'] -%><pre><%= h(r['error']['class']) %>: <%= h(r['error']['message']) %>
       <%= h(Array(r['error']['backtrace']).join("\n")) %></pre><%- end -%>
+              <%- if r['file_command'] -%><div>Not filed. To copy it into place, run this on the Mac:</div><pre><%= h(r['file_command']) %></pre><%- end -%>
               <%- if r['repro'] -%><div>Re-run:</div><pre><%= h(r['repro']) %></pre><%- end -%>
             </details>
             <%- end -%>

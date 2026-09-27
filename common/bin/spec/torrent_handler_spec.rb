@@ -244,13 +244,13 @@ describe TorrentHandler do
       o = other('Some.Author.Some.Title.2019.epub-GRP', 'title.epub', 'title.mobi', 'cover.jpg')
       expect(o.status).to eq('other')
       expect(o.outcome).to eq('ebook')
-      expect(o.message).to eq('eBook: 1 epub, 1 mobi')
+      expect(o.message).to eq('eBook: 1 epub, 1 mobi; not filed')
       expect(o.media_file).to eq(File.join(@dl, 'Some.Author.Some.Title.2019.epub-GRP'))
     end
 
     it 'recognises a comic, and a comic that comes with a PDF' do
       expect(other('Hero.Comic.v02.2020.Digital-GRP', 'hero-02.cbz', 'hero-02.pdf').outcome).to eq('comic')
-      expect(other('Other.Comic-GRP', 'x.cbr').message).to eq('Comic: 1 cbr')
+      expect(other('Other.Comic-GRP', 'x.cbr').message).to eq('Comic: 1 cbr; not filed')
     end
 
     it 'treats a lone PDF as an eBook unless the name looks like a comic' do
@@ -263,7 +263,7 @@ describe TorrentHandler do
       expect(other('Some.Book-GRP', 'book.m4b').outcome).to eq('audiobook')
       o = other('Another.Book-GRP', '01.mp3', '02.mp3', '03.mp3', 'cover.jpg')
       expect(o.outcome).to eq('audiobook')
-      expect(o.message).to eq('Audiobook: 3 mp3')
+      expect(o.message).to eq('Audiobook: 3 mp3; not filed')
     end
 
     it 'tells music from audiobooks' do
@@ -282,7 +282,7 @@ describe TorrentHandler do
       # one or two tracks with no other evidence is music
       o = other('Single.Track-GRP', 'song.mp3')
       expect(o.outcome).to eq('music')
-      expect(o.message).to eq('Music: 1 mp3')
+      expect(o.message).to eq('Music: 1 mp3; not filed')
     end
 
     it 'prefers comics over eBooks over audio when mixed, and video over all' do
@@ -290,6 +290,78 @@ describe TorrentHandler do
       expect(other('Mixed2-GRP', 'a.epub', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('ebook')
       expect(other('Mixed3-GRP', 'book.m4b', '01.flac').outcome).to eq('audiobook')
       expect(other('Some.Show.S01E01-GRP', 'ep.mkv', 'notes.pdf').outcome).to eq('tv')
+    end
+
+    it 'records recognised downloads as not filed by default' do
+      o = other('Some.Author.Some.Title.2019.epub-GRP', 'title.epub')
+      expect(o.status).to eq('other')
+      expect(o.message).to eq('eBook: 1 epub; not filed')
+      expect(o.destination).to be_nil
+    end
+
+    context 'with filing enabled' do
+      def filing(name, *files)
+        files.each { |f| touch(File.join(@dl, name, f), 'data') }
+        @dropbox = File.join(@dl, '..', 'dropbox-media')
+        FileUtils.mkdir_p(@dropbox)
+        dirs = %w[comic ebook audiobook music].map { |k| [k, File.join(@dropbox, k)] }.to_h
+        TorrentHandler.new(Torrent.new(name, @dl), tv_directory: @tv, movie_directory: @movies,
+                                                    other_directories: dirs, file_other: true, logger: null_logger).run!
+      end
+
+      it 'copies a directory torrent as it is' do
+        name = 'Some.Author.Some.Title.2019.epub-GRP'
+        o = filing(name, 'title.epub', 'title.mobi', 'covers/front.jpg')
+        expect(o.status).to eq('ok')
+        expect(o.outcome).to eq('ebook')
+        expect(o.action).to eq('copy')
+        expect(o.destination).to eq(File.join(@dropbox, 'ebook', name))
+        expect(o.message).to eq("Copied #{name} into #{File.join(@dropbox, 'ebook')}; eBook: 1 epub, 1 mobi")
+        expect(entries(o.destination)).to eq(%w[covers title.epub title.mobi])
+        expect(File.read(File.join(o.destination, 'covers', 'front.jpg'))).to eq('data')
+        expect(File.exist?(File.join(@dl, name, 'title.epub'))).to be true # copied, not moved
+        expect(File.stat(File.join(o.destination, 'title.epub')).nlink).to eq(1) # copied, not linked
+        expect(Dir.glob(File.join(@dropbox, 'ebook', '*.copying'))).to eq([])
+      end
+
+      it 'copies a single-file torrent' do
+        touch(File.join(@dl, 'book.m4b'), 'audio')
+        @dropbox = File.join(@dl, '..', 'dropbox-media')
+        FileUtils.mkdir_p(@dropbox)
+        dirs = { 'audiobook' => File.join(@dropbox, 'audiobook') }
+        o = TorrentHandler.new(Torrent.new('book.m4b', @dl), tv_directory: @tv, movie_directory: @movies,
+                                                             other_directories: dirs, file_other: true, logger: null_logger).run!
+        expect(o.status).to eq('ok')
+        expect(o.outcome).to eq('audiobook')
+        expect(File.read(File.join(@dropbox, 'audiobook', 'book.m4b'))).to eq('audio')
+      end
+
+      it 'leaves an item that is already there alone' do
+        name = 'Hero.Comic.v02.2020.Digital-GRP'
+        filing(name, 'hero.cbz')
+        touch(File.join(@dl, name, 'extra.cbz'))
+        o = filing(name)
+        expect(o.status).to eq('ok')
+        expect(o.message).to start_with("Already had #{name}")
+        expect(entries(File.join(@dropbox, 'comic', name))).to eq(['hero.cbz'])
+      end
+
+      it 'raises when the Dropbox folder is missing' do
+        name = 'Artist.Album.2020.FLAC-GRP'
+        touch(File.join(@dl, name, '01.flac'))
+        dirs = { 'music' => File.join(@dl, '..', 'nowhere', 'music') }
+        h = TorrentHandler.new(Torrent.new(name, @dl), tv_directory: @tv, movie_directory: @movies,
+                                                       other_directories: dirs, file_other: true, logger: null_logger)
+        expect { h.run! }.to raise_error(/missing/)
+      end
+
+      it 'does not file a kind that has no directory' do
+        name = 'Artist.Album.2020.FLAC-GRP'
+        touch(File.join(@dl, name, '01.flac'))
+        h = TorrentHandler.new(Torrent.new(name, @dl), tv_directory: @tv, movie_directory: @movies,
+                                                       other_directories: {}, file_other: true, logger: null_logger)
+        expect(h.run!.status).to eq('other')
+      end
     end
 
     it 'still calls unrelated files no_media' do
@@ -358,7 +430,7 @@ describe TorrentHandler do
       end
       o = h.run!
       expect(o.outcome).to eq('ebook')
-      expect(o.message).to eq("Archive #{name}.rar contained no video; eBook: 1 epub")
+      expect(o.message).to eq("Archive #{name}.rar contained no video; eBook: 1 epub; not filed")
     end
   end
 end
