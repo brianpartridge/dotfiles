@@ -42,9 +42,15 @@ files). `transmission/LICENSE` is upstream's GPL v2.
 
 ## Day to day
 
-Edit files under `common/web/transmission/`, then:
+Edit files under `common/web/transmission/` (or pull), then deploy. Apache
+serves the deployed copy, not the checkout, so a pull alone changes nothing:
 
     ~/bin/transmission-web-deploy.sh
+    curl -s http://localhost/transmission/web/DEPLOYED      # which commit is being served
+
+The Apache config sends `Cache-Control: no-cache` for the UI and the
+dashboard, so a plain refresh picks up a deploy. If the config was installed
+before that line existed, re-copy it and `sudo apachectl graceful`.
 
 The deploy copies the tree into place with an atomic swap, writes a
 `DEPLOYED` file naming the commit it came from (and whether the tree had
