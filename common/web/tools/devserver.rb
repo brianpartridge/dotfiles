@@ -83,7 +83,10 @@ module Mock
     torrent(8, 'Ancient.Thing.2010-GRP', 700_000_000, 1.0, 0, done_ago: 30 * 86_400, age: 31 * 86_400),
     torrent(9, 'Stalled.Thing.S02E01-GRP', 900_000_000, 0.0, 4, error: 3, error_string: 'No data found! Ensure your drives are connected'),
     torrent(10, 'Last.Week.Show.S05E02.720p-GRP', 1_200_000_000, 1.0, 6, done_ago: 9 * 86_400, age: 10 * 86_400),
-    torrent(11, 'Old.Movie.1999.720p.BluRay-GRP', 4_000_000_000, 1.0, 0, done_ago: 40 * 86_400, age: 41 * 86_400)
+    torrent(11, 'Old.Movie.1999.720p.BluRay-GRP', 4_000_000_000, 1.0, 0, done_ago: 40 * 86_400, age: 41 * 86_400),
+    torrent(12, 'Some.Author.Some.Title.2019.epub-GRP', 4_000_000, 1.0, 6, done_ago: 2000),
+    torrent(13, 'Hero.Comic.v02.2020.Digital-GRP', 300_000_000, 1.0, 6, done_ago: 2500),
+    torrent(14, 'Some.Book.Unabridged.Audiobook-GRP', 500_000_000, 1.0, 6, done_ago: 3000)
   ].freeze
 
   def self.record(id, status, outcome, message, destination = nil)
@@ -100,7 +103,10 @@ module Mock
       record(5, 'other', 'no_media', 'No media files among 14 files'),
       record(7, 'error', 'error', 'RuntimeError: Destination directory is missing (volume not mounted?): /Users/theater/Media/tv'),
       record(10, 'ok', 'tv', 'Linked Last.Week.Show.S05E02.720p-GRP.mkv into /Users/theater/Media/tv', '/Users/theater/Media/tv/Last.Week.Show.S05E02.720p-GRP.mkv'),
-      record(11, 'ok', 'movie', 'Linked Old.Movie.1999.720p.BluRay-GRP.mkv into /Users/theater/Media/movies', '/Users/theater/Media/movies/Old.Movie.1999.720p.BluRay-GRP.mkv')
+      record(11, 'ok', 'movie', 'Linked Old.Movie.1999.720p.BluRay-GRP.mkv into /Users/theater/Media/movies', '/Users/theater/Media/movies/Old.Movie.1999.720p.BluRay-GRP.mkv'),
+      record(12, 'other', 'ebook', 'eBook: 1 epub, 1 mobi'),
+      record(13, 'other', 'comic', 'Comic: 12 cbz'),
+      record(14, 'other', 'audiobook', 'Audiobook: 1 m4b')
     ].to_h,
     'by_name' => {}
   }.freeze

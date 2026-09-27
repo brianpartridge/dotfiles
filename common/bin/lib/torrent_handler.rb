@@ -77,6 +77,41 @@ module MediaFile
   end
 end
 
+# Recognises downloads that are not video: eBooks, comics and audiobooks.
+# These are classified and recorded but not filed anywhere.
+module OtherMedia
+  EBOOK = %w[.epub .mobi .azw .azw3].freeze
+  COMIC = %w[.cbr .cbz .cb7 .cbt].freeze
+  PDF = '.pdf'
+  AUDIOBOOK_SINGLE = %w[.m4b].freeze
+  AUDIO = %w[.m4a .mp3].freeze
+  # A single mp3 is not a book; a set of them probably is.
+  AUDIO_MIN_FILES = 3
+  # PDFs are eBooks unless the name looks like a comic release.
+  COMIC_NAME_HINT = /\b(comics?|graphic novel|digital|tpb|webrip|v\d{1,3}|#\d+|\d{3}\s*\(\d{4}\))\b/i
+
+  # [kind, description] or nil. kind is 'ebook', 'comic' or 'audiobook'.
+  def self.classify(files, name)
+    ext = files.group_by { |f| File.extname(f).downcase }
+    count = lambda { |exts| exts.inject(0) { |n, e| n + (ext[e] || []).count } } # Array#sum needs Ruby 2.4
+
+    return ['comic', summary(ext, COMIC + [PDF])] if count.call(COMIC).positive?
+    return ['ebook', summary(ext, EBOOK + [PDF])] if count.call(EBOOK).positive?
+    if count.call([PDF]).positive?
+      kind = name =~ COMIC_NAME_HINT ? 'comic' : 'ebook'
+      return [kind, summary(ext, [PDF])]
+    end
+    return ['audiobook', summary(ext, AUDIOBOOK_SINGLE + AUDIO)] if count.call(AUDIOBOOK_SINGLE).positive?
+    return ['audiobook', summary(ext, AUDIO)] if count.call(AUDIO) >= AUDIO_MIN_FILES
+
+    nil
+  end
+
+  def self.summary(ext, exts)
+    exts.select { |e| ext.key?(e) }.map { |e| "#{ext[e].count} #{e.sub('.', '')}" }.join(', ')
+  end
+end
+
 # The result of handling one torrent. Serialises into a TransferLog record.
 class Outcome
   attr_reader :status, :outcome, :action, :message, :media_file, :destination, :error
@@ -165,10 +200,8 @@ class TorrentHandler
       handle_media_set(media)
     elsif rars.count == 1
       extract_and_handle(rars.first)
-    elsif rars.empty?
-      Outcome.other('no_media', "No media files among #{files.count} files")
     else
-      Outcome.other('multiple_media', "#{rars.count} archives and no media files; nothing to pick")
+      classify_other(files, rars)
     end
   end
 
@@ -182,14 +215,30 @@ class TorrentHandler
     raise 'unrar not found on PATH' if result.nil?
     raise "unrar exited with status #{$CHILD_STATUS.exitstatus} for #{rar}" unless result
 
-    new_media = (Set.new(@torrent.files) - before).select { |f| MediaFile.valid?(f) }
+    after = @torrent.files
+    new_media = (Set.new(after) - before).select { |f| MediaFile.valid?(f) }
     if new_media.count == 1
       handle_media(new_media.first, extracted: true)
     elsif new_media.empty?
-      Outcome.other('no_media', "Archive #{File.basename(rar)} contained no media files")
+      classify_other(after, [], "Archive #{File.basename(rar)} contained no video")
     else
       handle_media_set(new_media, extracted: true)
     end
+  end
+
+  # No video to file. Say what the download is, if it is something we
+  # recognise (books, comics, audiobooks), without moving anything.
+  def classify_other(files, rars, prefix = nil)
+    kind, description = OtherMedia.classify(files, @torrent.name)
+    if kind
+      label = { 'ebook' => 'eBook', 'comic' => 'Comic', 'audiobook' => 'Audiobook' }[kind]
+      return Outcome.other(kind, [prefix, "#{label}: #{description}"].compact.join('; '), media_file: @torrent.path)
+    end
+    if rars.count > 1
+      return Outcome.other('multiple_media', "#{rars.count} archives and no media files; nothing to pick")
+    end
+
+    Outcome.other('no_media', [prefix, "No media files among #{files.count} files"].compact.join('; '))
   end
 
   # :tv, :movie or nil for a release name.

@@ -19,6 +19,9 @@
         ['tv', 'Filed: TV'],
         ['movie', 'Filed: Movie'],
         ['other', 'Other'],
+        ['ebook', 'Other: eBook'],
+        ['comic', 'Other: Comic'],
+        ['audiobook', 'Other: Audiobook'],
         ['error', 'Failed'],
         ['unhandled', 'Not handled'],
         ['norecord', 'No record']
@@ -56,6 +59,7 @@
         var info = extra.classify(torrent);
         var kind = info ? info.kind : null;
         if (current.handling === 'filed') { return kind === 'tv' || kind === 'movie'; }
+        if (current.handling === 'other') { return !!info && info.status === 'other'; }
         return kind === current.handling;
     }
 

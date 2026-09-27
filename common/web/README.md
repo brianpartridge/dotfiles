@@ -93,6 +93,7 @@ processed it:
 | Badge | Meaning |
 |---|---|
 | **TV**, **Movie** (green) | filed for Plex; hover for the destination |
+| **eBook**, **Comic**, **Audiobook** (blue-grey) | recognised, recorded, not filed anywhere |
 | **Other** (grey) | finished fine, nothing to file: not TV or a movie, no media files, or nothing usable in an archive |
 | **Failed** (red) | the handler hit an error; hover for the message |
 | **Not handled** (red) | completed in the last 7 days but the script left no record, so it never ran or crashed before recording |
@@ -108,8 +109,9 @@ refreshed every minute by the page.
 Two more selects in the filter bar, applied on top of Transmission's own
 "Show", tracker and text filters:
 
-- **Handling**: Any, Filed, Filed: TV, Filed: Movie, Other, Failed, Not
-  handled, No record. Uses the same classification as the badges.
+- **Handling**: Any, Filed, Filed: TV, Filed: Movie, Other, Other: eBook /
+  Comic / Audiobook, Failed, Not handled, No record. Uses the same
+  classification as the badges; "Other" includes the named kinds.
 - **Age**: Any, Added today / this week / this month, Added over a month ago,
   Finished over a week / a month ago. "Finished" uses Transmission's
   completion time, so unfinished torrents never match those.

@@ -39,6 +39,9 @@ module TransferDashboard
   OUTCOME_LABELS = {
     'tv' => 'TV episode',
     'movie' => 'Movie',
+    'ebook' => 'eBook',
+    'comic' => 'Comic',
+    'audiobook' => 'Audiobook',
     'no_media' => 'No media files',
     'multiple_media' => 'Could not pick a file',
     'unknown_media' => 'Not TV or a movie',

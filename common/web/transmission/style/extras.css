@@ -36,6 +36,9 @@ ul.torrent_list li.torrent.compact a.transfer_badge {
 ul.torrent_list li.torrent a.transfer_badge.tv,
 ul.torrent_list li.torrent a.transfer_badge.movie { background: #0ca30c; }
 ul.torrent_list li.torrent a.transfer_badge.other { background: #8d8c85; }
+ul.torrent_list li.torrent a.transfer_badge.ebook,
+ul.torrent_list li.torrent a.transfer_badge.comic,
+ul.torrent_list li.torrent a.transfer_badge.audiobook { background: #5b6ea6; }
 ul.torrent_list li.torrent a.transfer_badge.error,
 ul.torrent_list li.torrent a.transfer_badge.unhandled { background: #d03b3b; }
 ul.torrent_list li.torrent a.transfer_badge:hover { filter: brightness(1.1); }

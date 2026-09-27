@@ -11,7 +11,8 @@ require 'time'
 #
 #   ts          ISO 8601 time the record was written
 #   status      "ok" (filed for Plex) | "other" (finished, nothing to file) | "error"
-#   outcome     "tv" | "movie" | "no_media" | "multiple_media" |
+#   outcome     "tv" | "movie" (filed) | "ebook" | "comic" | "audiobook"
+#               (recognised, not filed) | "no_media" | "multiple_media" |
 #               "unknown_media" | "error" | "no_torrent"
 #   action      "link" (hardlink) | "symlink" (different volume) | "extract_link" |
 #               "extract_symlink" | "none"
@@ -26,7 +27,7 @@ require 'time'
 class TransferLog
   DEFAULT_PATH = '~/logs/transfers.jsonl'
   STATUSES = %w[ok other error].freeze
-  OUTCOMES = %w[tv movie no_media multiple_media unknown_media error no_torrent].freeze
+  OUTCOMES = %w[tv movie ebook comic audiobook no_media multiple_media unknown_media error no_torrent].freeze
 
   attr_reader :path
 

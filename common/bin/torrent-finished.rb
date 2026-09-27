@@ -70,6 +70,12 @@ def notify_outcome(torrent, outcome)
     Notify.push(outcome.message, title: 'Movie ready')
   when 'error', 'no_torrent'
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer failed', priority: :high)
+  when 'ebook'
+    Notify.push("#{name}\n#{outcome.message}", title: 'eBook downloaded')
+  when 'comic'
+    Notify.push("#{name}\n#{outcome.message}", title: 'Comic downloaded')
+  when 'audiobook'
+    Notify.push("#{name}\n#{outcome.message}", title: 'Audiobook downloaded')
   else
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer complete')
   end

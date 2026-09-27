@@ -234,6 +234,50 @@ describe TorrentHandler do
     expect(o.media_file).to end_with('thing.mkv')
   end
 
+  context 'books and audio' do
+    def other(name, *files)
+      files.each { |f| touch(File.join(@dl, name, f)) }
+      handler(name).run!
+    end
+
+    it 'recognises an eBook' do
+      o = other('Some.Author.Some.Title.2019.epub-GRP', 'title.epub', 'title.mobi', 'cover.jpg')
+      expect(o.status).to eq('other')
+      expect(o.outcome).to eq('ebook')
+      expect(o.message).to eq('eBook: 1 epub, 1 mobi')
+      expect(o.media_file).to eq(File.join(@dl, 'Some.Author.Some.Title.2019.epub-GRP'))
+    end
+
+    it 'recognises a comic, and a comic that comes with a PDF' do
+      expect(other('Hero.Comic.v02.2020.Digital-GRP', 'hero-02.cbz', 'hero-02.pdf').outcome).to eq('comic')
+      expect(other('Other.Comic-GRP', 'x.cbr').message).to eq('Comic: 1 cbr')
+    end
+
+    it 'treats a lone PDF as an eBook unless the name looks like a comic' do
+      expect(other('Some.Textbook.3rd.Edition-GRP', 'book.pdf').outcome).to eq('ebook')
+      expect(other('Hero.Comic.012.2020.Digital-GRP', 'hero.pdf').outcome).to eq('comic')
+      expect(other('Hero.Comic.#12-GRP', 'hero.pdf').outcome).to eq('comic')
+    end
+
+    it 'recognises an audiobook by m4b, or by a set of mp3s' do
+      expect(other('Some.Book.Unabridged-GRP', 'book.m4b').outcome).to eq('audiobook')
+      o = other('Another.Book-GRP', '01.mp3', '02.mp3', '03.mp3', 'cover.jpg')
+      expect(o.outcome).to eq('audiobook')
+      expect(o.message).to eq('Audiobook: 3 mp3')
+      expect(other('Single.Track-GRP', 'song.mp3').outcome).to eq('no_media')
+    end
+
+    it 'prefers comics over eBooks over audio when mixed, and video over all' do
+      expect(other('Mixed-GRP', 'a.cbz', 'a.epub', 'a.pdf').outcome).to eq('comic')
+      expect(other('Mixed2-GRP', 'a.epub', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('ebook')
+      expect(other('Some.Show.S01E01-GRP', 'ep.mkv', 'notes.pdf').outcome).to eq('tv')
+    end
+
+    it 'still calls unrelated files no_media' do
+      expect(other('Software-GRP', 'setup.exe', 'readme.txt').outcome).to eq('no_media')
+    end
+  end
+
   context 'archives' do
     let(:name) { 'Some.Show.S02E05.720p.HDTV-GRP' }
 
@@ -281,7 +325,21 @@ describe TorrentHandler do
       touch(File.join(@dl, name, "#{name}.rar"))
       h = handler(name)
       allow(h).to receive(:system).and_return(true)
-      expect(h.run!.outcome).to eq('no_media')
+      o = h.run!
+      expect(o.outcome).to eq('no_media')
+      expect(o.message).to start_with('Archive')
+    end
+
+    it 'classifies what an archive extracted to when it is not video' do
+      touch(File.join(@dl, name, "#{name}.rar"))
+      h = handler(name)
+      allow(h).to receive(:system) do |*_args, **_opts|
+        touch(File.join(@dl, name, 'book.epub'))
+        true
+      end
+      o = h.run!
+      expect(o.outcome).to eq('ebook')
+      expect(o.message).to eq("Archive #{name}.rar contained no video; eBook: 1 epub")
     end
   end
 end

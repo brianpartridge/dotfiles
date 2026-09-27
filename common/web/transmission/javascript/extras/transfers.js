@@ -20,10 +20,15 @@
     var LABELS = {
         tv: 'TV',
         movie: 'Movie',
+        ebook: 'eBook',
+        comic: 'Comic',
+        audiobook: 'Audiobook',
         other: 'Other',
         error: 'Failed',
         unhandled: 'Not handled'
     };
+    // "other" outcomes that are worth naming on the badge.
+    var NAMED_OTHER = { ebook: true, comic: true, audiobook: true };
 
     var data = null;
     var loaded = false;
@@ -63,10 +68,11 @@
         var record = recordFor(torrent);
         if (record) {
             var status = record.status === 'warning' ? 'other' : record.status;
-            var kind = status === 'ok' ? record.outcome : status;
+            var kind = status;
+            if (status === 'ok' || (status === 'other' && NAMED_OTHER[record.outcome])) { kind = record.outcome; }
             var title = record.message || '';
             if (record.destination) { title += '\n' + record.destination; }
-            return { kind: kind, text: LABELS[kind] || kind, title: title };
+            return { kind: kind, status: status, text: LABELS[kind] || kind, title: title };
         }
         if (!data || torrent.getPercentDone() < 1) { return null; }
         var windowDays = data.unhandled_window_days || 7;
@@ -74,6 +80,7 @@
         if (now - doneAt > windowDays * DAY) { return null; }
         return {
             kind: 'unhandled',
+            status: 'unhandled',
             text: LABELS.unhandled,
             title: 'Finished, but torrent-finished.sh left no record. Check ~/logs/torrent-finished.out.'
         };
