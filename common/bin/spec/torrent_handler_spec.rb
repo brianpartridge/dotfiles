@@ -112,6 +112,40 @@ describe TorrentHandler do
     expect(File.read(media)).to eq('video')
   end
 
+  it 'names the link after the torrent, not the file inside it' do
+    name = 'Some.Movie.2019.1080p.BluRay.x264-GRP'
+    touch(File.join(@dl, name, 'grp-smv1080.mkv'))
+    touch(File.join(@dl, name, 'grp-smv1080.nfo'))
+    o = handler(name).run!
+    expect(o.outcome).to eq('movie')
+    expect(o.destination).to eq(File.join(@movies, "#{name}.mkv"))
+    expect(o.message).to eq("Linked #{name}.mkv (from grp-smv1080.mkv) into #{@movies}")
+    expect(File.identical?(File.join(@dl, name, 'grp-smv1080.mkv'), o.destination)).to be true
+
+    name = 'Some.Show.S01E02.720p.WEB-GRP'
+    touch(File.join(@dl, name, 'grp-ss102.mkv'))
+    expect(handler(name).run!.destination).to eq(File.join(@tv, "#{name}.mkv"))
+  end
+
+  it 'does not double the extension when a directory torrent is named like a file' do
+    name = 'Some.Movie.2019.1080p-GRP.mkv'
+    touch(File.join(@dl, name, 'grp.mkv'))
+    expect(handler(name).run!.destination).to eq(File.join(@movies, name))
+  end
+
+  it 'names an extracted file after the torrent too' do
+    name = 'Some.Movie.2019.1080p.BluRay-GRP'
+    touch(File.join(@dl, name, "#{name}.rar"))
+    h = handler(name)
+    allow(h).to receive(:system) do |*_args, **_opts|
+      touch(File.join(@dl, name, 'grp-smv.mkv'))
+      true
+    end
+    o = h.run!
+    expect(o.action).to eq('extract_link')
+    expect(o.destination).to eq(File.join(@movies, "#{name}.mkv"))
+  end
+
   it 'falls back to the file name when the torrent name does not classify' do
     touch(File.join(@dl, 'grp-ss0205', 'Some.Show.S02E05.720p.mkv'))
     o = handler('grp-ss0205').run!

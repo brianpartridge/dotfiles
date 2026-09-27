@@ -305,19 +305,30 @@ class TorrentHandler
 
   # Files one media file. Classified by the torrent name, falling back to the
   # file's own name; by_filename skips the torrent name (see handle_media_set).
+  #
+  # The link is named after whichever name classified it. A directory torrent
+  # "Some.Movie.2019.1080p-GRP" often holds "grp-smv.mkv", and Plex needs the
+  # former, so the link becomes "Some.Movie.2019.1080p-GRP.mkv".
   def handle_media(path, extracted: false, by_filename: false)
     filename = File.basename(path)
-    kind = by_filename ? classify(filename) : (classify(@torrent.name) || classify(filename))
+    kind = by_filename ? classify(filename) : classify(@torrent.name)
+    named_by_file = by_filename
+    if kind.nil? && !by_filename
+      kind = classify(filename)
+      named_by_file = true
+    end
+    link_name = named_by_file ? filename : torrent_link_name(path)
+    origin = link_name == filename ? '' : " (from #{filename})"
     case kind
     when :tv
       @log.info "Found episode: #{filename}"
-      destination, note, action = link_file(path, @tv_directory)
-      Outcome.ok('tv', "#{note} #{filename} into #{@tv_directory}",
+      destination, note, action = link_file(path, @tv_directory, link_name)
+      Outcome.ok('tv', "#{note} #{link_name}#{origin} into #{@tv_directory}",
                  action: extracted ? "extract_#{action}" : action, media_file: path, destination: destination)
     when :movie
       @log.info "Found movie: #{filename}"
-      destination, note, action = link_file(path, @movie_directory)
-      Outcome.ok('movie', "#{note} #{filename} into #{@movie_directory}",
+      destination, note, action = link_file(path, @movie_directory, link_name)
+      Outcome.ok('movie', "#{note} #{link_name}#{origin} into #{@movie_directory}",
                  action: extracted ? "extract_#{action}" : action, media_file: path, destination: destination)
     else
       Outcome.other('unknown_media', "'#{by_filename ? filename : @torrent.name}' is not a TV episode or a movie",
@@ -351,6 +362,15 @@ class TorrentHandler
                action: 'copy', media_file: source, destination: destination)
   end
 
+  # The torrent's name with the media file's extension. For a single-file
+  # torrent the torrent name is the file name already.
+  def torrent_link_name(path)
+    return File.basename(path) unless File.directory?(@torrent.path)
+
+    ext = File.extname(path)
+    @torrent.name.downcase.end_with?(ext.downcase) ? @torrent.name : "#{@torrent.name}#{ext}"
+  end
+
   def ensure_directory(directory)
     return if File.directory?(directory)
 
@@ -363,9 +383,9 @@ class TorrentHandler
   # different volume, where a hardlink is not possible.
   #
   # Returns [destination, note, action]
-  def link_file(path, directory)
+  def link_file(path, directory, link_name = File.basename(path))
     ensure_directory(directory)
-    destination = File.join(directory, File.basename(path))
+    destination = File.join(directory, link_name)
 
     if File.symlink?(destination)
       # A link from the old symlink scheme, or a stale one: replace it.
