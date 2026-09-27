@@ -91,8 +91,14 @@ module Mock
   ].freeze
 
   def self.record(id, status, outcome, message, destination = nil)
-    [format('%040x', id), { 'ts' => Time.at(NOW - 3600).iso8601, 'status' => status, 'outcome' => outcome,
-                            'message' => message, 'destination' => destination }]
+    entry = { 'ts' => Time.at(NOW - 3600).iso8601, 'status' => status, 'outcome' => outcome,
+              'message' => message, 'destination' => destination }
+    if status == 'other' && %w[ebook comic audiobook music].include?(outcome)
+      name = TORRENTS.find { |t| t['id'] == id }['name']
+      entry['file_command'] = "/usr/bin/env TR_TORRENT_DIR='/Users/theater/Transfers/3_complete' TR_TORRENT_HASH='#{format('%040x', id)}' " \
+                              "TR_TORRENT_ID='#{id}' TR_TORRENT_NAME='#{name}' ruby /Users/theater/bin/torrent-finished.rb --file-other"
+    end
+    [format('%040x', id), entry]
   end
 
   TRANSFERS = {

@@ -130,7 +130,10 @@ Notifications you will get:
 
       /usr/bin/env TR_TORRENT_DIR='...' TR_TORRENT_NAME='...' ruby ~/bin/torrent-finished.rb --file-other
 
-  Run it on the Mac when you want the item. It is safe to re-run: an item
+  The dashboard has a Copy button next to it (and next to every re-run
+  command), and in the Transmission web UI clicking the item's badge copies
+  it. Paste it into a terminal on the Mac when you want the item. It is safe
+  to re-run: an item
   already present is left alone, and the copy lands under a temporary name
   and is renamed when complete so Dropbox never syncs a partial item. To file
   these automatically, add `--file-other` to the command in

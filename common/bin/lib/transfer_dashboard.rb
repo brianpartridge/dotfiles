@@ -254,14 +254,15 @@ module TransferDashboard
                       OUTCOME_LABELS.fetch(r['outcome'], r['outcome'].to_s),
                       TransferDashboard.torrent_name(r))
         out << "               #{r['message']}" unless r['status'] == 'ok'
+        out << "               file: #{r['file_command']}" if r['file_command']
       end
       out << '  (no transfers recorded yet)' if @report.records.empty?
       out.join("\n") + "\n"
     end
   end
 
-  # Static HTML rendering. No JavaScript, no external assets, so it reads the
-  # same on a phone as it does in a desktop browser.
+  # Static HTML rendering. No external assets and only a few lines of inline
+  # script (the copy buttons), so it reads the same on a phone as on a desktop.
   class Html
     def initialize(report)
       @report = report
@@ -402,6 +403,10 @@ module TransferDashboard
         details { font-size: 12px; margin-top: 4px; }
         summary { cursor: pointer; color: var(--accent); }
         pre { background: var(--surface-2); padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0 0; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+        .cmd { position: relative; }
+        .cmd pre { padding-right: 64px; }
+        .cmd button { position: absolute; top: 10px; right: 6px; font: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--accent); cursor: pointer; }
+        .cmd button:hover { border-color: var(--accent); }
         code { font-size: 12px; }
         .meter { position: relative; height: 6px; border-radius: 3px; background: var(--meter-track); margin-top: 6px; overflow: hidden; }
         .meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
@@ -486,8 +491,8 @@ module TransferDashboard
               <%- if r['duration_s'] -%><div>Took <%= h(r['duration_s']) %>s<%- if r.key?('notified') -%>, notification <%= r['notified'] ? 'sent' : 'not sent' %><%- end -%></div><%- end -%>
               <%- if r['error'] -%><pre><%= h(r['error']['class']) %>: <%= h(r['error']['message']) %>
       <%= h(Array(r['error']['backtrace']).join("\n")) %></pre><%- end -%>
-              <%- if r['file_command'] -%><div>Not filed. To copy it into place, run this on the Mac:</div><pre><%= h(r['file_command']) %></pre><%- end -%>
-              <%- if r['repro'] -%><div>Re-run:</div><pre><%= h(r['repro']) %></pre><%- end -%>
+              <%- if r['file_command'] -%><div>Not filed. To copy it into place, run this on the Mac:</div><div class="cmd"><pre><%= h(r['file_command']) %></pre><button type="button" class="copy">Copy</button></div><%- end -%>
+              <%- if r['repro'] -%><div>Re-run:</div><div class="cmd"><pre><%= h(r['repro']) %></pre><button type="button" class="copy">Copy</button></div><%- end -%>
             </details>
             <%- end -%>
             </div>
@@ -501,6 +506,36 @@ module TransferDashboard
           showing the last <%= @report.records.count %> records
         </footer>
       </main>
+      <script>
+      // Copy buttons. The page is served over plain HTTP, where navigator.clipboard
+      // is unavailable, so select-and-copy comes first and the clipboard API is the fallback.
+      document.addEventListener('click', function (event) {
+        var button = event.target.closest ? event.target.closest('button.copy') : null;
+        if (!button) { return; }
+        var pre = button.parentNode.querySelector('pre');
+        var text = pre.textContent;
+        var done = function (ok) {
+          button.textContent = ok ? 'Copied' : 'Select and copy';
+          if (!ok) { var range = document.createRange(); range.selectNodeContents(pre); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); }
+          setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+        };
+        var ok = false;
+        try {
+          var area = document.createElement('textarea');
+          area.value = text;
+          area.setAttribute('readonly', '');
+          area.style.position = 'fixed';
+          area.style.top = '-1000px';
+          document.body.appendChild(area);
+          area.select();
+          area.setSelectionRange(0, text.length);
+          ok = document.execCommand('copy');
+          document.body.removeChild(area);
+        } catch (e) { ok = false; }
+        if (ok || !navigator.clipboard) { done(ok); return; }
+        navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+      });
+      </script>
       </body>
       </html>
     HTML

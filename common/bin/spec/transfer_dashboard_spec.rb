@@ -91,7 +91,7 @@ describe TransferDashboard do
         html = File.read(out)
         expect(html).to include('Show.S01E01', 'Never.Handled', 'last 7 days, never handled', 'unhandled, 7 days', 'In progress', '50%')
         expect(html).to include('RuntimeError: missing', 'env ... ruby x')
-        expect(html).not_to include('<script')
+        expect(html).not_to include('<script src') # only the inline copy-button script
         expect(File.exist?("#{out}.tmp")).to be false
       end
     end
@@ -123,6 +123,19 @@ describe TransferDashboard do
       end
     end
 
+    it 'gives every command a copy button' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        rec = [{ 'ts' => now.iso8601, 'status' => 'other', 'outcome' => 'ebook', 'message' => 'eBook: 1 epub; not filed',
+                 'torrent' => { 'name' => 'Book' }, 'repro' => 'env A=1 ruby x', 'file_command' => 'env A=1 ruby x --file-other' }]
+        TransferDashboard.generate(report: build(records: rec), output: out, quiet: true)
+        html = File.read(out, encoding: 'UTF-8')
+        expect(html.scan('<button type="button" class="copy">Copy</button>').count).to eq(2)
+        expect(html).to include('<pre>env A=1 ruby x --file-other</pre>', '<pre>env A=1 ruby x</pre>')
+        expect(html).to include("execCommand('copy')")
+      end
+    end
+
     it 'shows a notice when Transmission is unreachable' do
       with_tmpdir do |dir|
         out = File.join(dir, 'index.html')
@@ -137,6 +150,12 @@ describe TransferDashboard do
       text = TransferDashboard.text(build(records: records, torrents: [torrent('Never.Handled', 'ddd')]))
       expect(text).to include('1 filed, 0 other, 1 failed', 'UNHANDLED', 'Never.Handled', 'Show.S01E01', '10m ago')
       expect(text).to include('Destination directory is missing')
+    end
+
+    it 'prints the filing command for unfiled downloads' do
+      rec = [{ 'ts' => now.iso8601, 'status' => 'other', 'outcome' => 'ebook', 'message' => 'eBook: 1 epub; not filed',
+               'torrent' => { 'name' => 'Book' }, 'file_command' => 'env A=1 ruby x --file-other' }]
+      expect(TransferDashboard.text(build(records: rec))).to include('file: env A=1 ruby x --file-other')
     end
   end
 

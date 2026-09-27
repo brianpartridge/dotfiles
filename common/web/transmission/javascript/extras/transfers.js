@@ -73,7 +73,8 @@
             if (status === 'ok' || (status === 'other' && NAMED_OTHER[record.outcome])) { kind = record.outcome; }
             var title = record.message || '';
             if (record.destination) { title += '\n' + record.destination; }
-            return { kind: kind, status: status, text: LABELS[kind] || kind, title: title };
+            if (record.file_command) { title += '\nClick to copy the command that files it.'; }
+            return { kind: kind, status: status, text: LABELS[kind] || kind, title: title, command: record.file_command || null };
         }
         if (!data || torrent.getPercentDone() < 1) { return null; }
         var windowDays = data.unhandled_window_days || 7;
@@ -87,6 +88,26 @@
         };
     }
 
+    // Copies text; the page is plain HTTP, where navigator.clipboard is
+    // unavailable, so select-and-copy comes first. Returns true on success.
+    function copyText(text) {
+        try {
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.top = '-1000px';
+            document.body.appendChild(area);
+            area.select();
+            area.setSelectionRange(0, text.length);
+            var ok = document.execCommand('copy');
+            document.body.removeChild(area);
+            if (ok) { return true; }
+        } catch (e) { /* fall through */ }
+        if (navigator.clipboard) { navigator.clipboard.writeText(text); return true; }
+        return false;
+    }
+
     function badgeFor(element) {
         var badge = element._transfer_badge;
         if (!badge) {
@@ -95,7 +116,15 @@
             badge.target = '_blank';
             badge.rel = 'noopener';
             // Keep the click from selecting or toggling the row underneath.
-            $(badge).on('click dblclick mousedown', function (e) { e.stopPropagation(); });
+            $(badge).on('dblclick mousedown', function (e) { e.stopPropagation(); });
+            $(badge).on('click', function (e) {
+                e.stopPropagation();
+                if (!badge._command) { return; } // plain link to the dashboard
+                e.preventDefault();
+                var label = badge.textContent;
+                badge.textContent = copyText(badge._command) ? 'Copied' : 'Copy failed';
+                setTimeout(function () { badge.textContent = label; }, 1500);
+            });
             element.appendChild(badge);
             element._transfer_badge = badge;
         }
@@ -116,9 +145,10 @@
             var badge = badgeFor(element);
             badge.style.display = '';
             badge.className = 'transfer_badge ' + info.kind;
-            badge.textContent = info.text;
+            if (badge.textContent !== 'Copied' && badge.textContent !== 'Copy failed') { badge.textContent = info.text; }
             badge.title = info.title;
             badge.href = (data && data.dashboard_url) || '/transfers/';
+            badge._command = info.command;
         }
     }
 
