@@ -23,12 +23,13 @@
         ebook: 'eBook',
         comic: 'Comic',
         audiobook: 'Audiobook',
+        music: 'Music',
         other: 'Other',
         error: 'Failed',
         unhandled: 'Not handled'
     };
     // "other" outcomes that are worth naming on the badge.
-    var NAMED_OTHER = { ebook: true, comic: true, audiobook: true };
+    var NAMED_OTHER = { ebook: true, comic: true, audiobook: true, music: true };
 
     var data = null;
     var loaded = false;

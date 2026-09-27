@@ -76,6 +76,8 @@ def notify_outcome(torrent, outcome)
     Notify.push("#{name}\n#{outcome.message}", title: 'Comic downloaded')
   when 'audiobook'
     Notify.push("#{name}\n#{outcome.message}", title: 'Audiobook downloaded')
+  when 'music'
+    Notify.push("#{name}\n#{outcome.message}", title: 'Music downloaded')
   else
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer complete')
   end

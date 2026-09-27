@@ -259,17 +259,36 @@ describe TorrentHandler do
       expect(other('Hero.Comic.#12-GRP', 'hero.pdf').outcome).to eq('comic')
     end
 
-    it 'recognises an audiobook by m4b, or by a set of mp3s' do
-      expect(other('Some.Book.Unabridged-GRP', 'book.m4b').outcome).to eq('audiobook')
+    it 'recognises an audiobook by m4b, or by a set of mp3s with nothing saying otherwise' do
+      expect(other('Some.Book-GRP', 'book.m4b').outcome).to eq('audiobook')
       o = other('Another.Book-GRP', '01.mp3', '02.mp3', '03.mp3', 'cover.jpg')
       expect(o.outcome).to eq('audiobook')
       expect(o.message).to eq('Audiobook: 3 mp3')
-      expect(other('Single.Track-GRP', 'song.mp3').outcome).to eq('no_media')
+    end
+
+    it 'tells music from audiobooks' do
+      # lossless formats and rip sidecars are music
+      expect(other('Artist.Album.2020-GRP', '01.flac', '02.flac').outcome).to eq('music')
+      expect(other('Artist.Album.2020-GRP', '01.mp3', '02.mp3', '03.mp3', 'album.cue', 'album.log').outcome).to eq('music')
+      # the release name decides when the files do not
+      expect(other('Artist.Album.2020.320.MP3-GRP', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('music')
+      expect(other('Artist.Discography.1990-2020-GRP', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('music')
+      expect(other('Some.Author.Some.Book.Unabridged.64kbps-GRP', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('audiobook')
+      # an audiobook hint in the name wins over a music hint
+      expect(other('Live.Free.Unabridged-GRP', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('audiobook')
+      # chapter-style file names mean a book
+      expect(other('Some.Book-GRP', 'Chapter 01.mp3', 'Chapter 02.mp3', 'Chapter 03.mp3', 'intro.mp3').outcome).to eq('audiobook')
+      expect(other('Some.Book-GRP', 'Part 1.m4a', 'Part 2.m4a').outcome).to eq('audiobook')
+      # one or two tracks with no other evidence is music
+      o = other('Single.Track-GRP', 'song.mp3')
+      expect(o.outcome).to eq('music')
+      expect(o.message).to eq('Music: 1 mp3')
     end
 
     it 'prefers comics over eBooks over audio when mixed, and video over all' do
       expect(other('Mixed-GRP', 'a.cbz', 'a.epub', 'a.pdf').outcome).to eq('comic')
       expect(other('Mixed2-GRP', 'a.epub', '01.mp3', '02.mp3', '03.mp3').outcome).to eq('ebook')
+      expect(other('Mixed3-GRP', 'book.m4b', '01.flac').outcome).to eq('audiobook')
       expect(other('Some.Show.S01E01-GRP', 'ep.mkv', 'notes.pdf').outcome).to eq('tv')
     end
 

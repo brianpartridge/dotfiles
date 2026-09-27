@@ -42,6 +42,7 @@ module TransferDashboard
     'ebook' => 'eBook',
     'comic' => 'Comic',
     'audiobook' => 'Audiobook',
+    'music' => 'Music',
     'no_media' => 'No media files',
     'multiple_media' => 'Could not pick a file',
     'unknown_media' => 'Not TV or a movie',

@@ -22,6 +22,7 @@
         ['ebook', 'Other: eBook'],
         ['comic', 'Other: Comic'],
         ['audiobook', 'Other: Audiobook'],
+        ['music', 'Other: Music'],
         ['error', 'Failed'],
         ['unhandled', 'Not handled'],
         ['norecord', 'No record']

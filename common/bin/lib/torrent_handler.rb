@@ -77,20 +77,25 @@ module MediaFile
   end
 end
 
-# Recognises downloads that are not video: eBooks, comics and audiobooks.
-# These are classified and recorded but not filed anywhere.
+# Recognises downloads that are not video: eBooks, comics, audiobooks and
+# music. These are classified and recorded but not filed anywhere.
 module OtherMedia
   EBOOK = %w[.epub .mobi .azw .azw3].freeze
   COMIC = %w[.cbr .cbz .cb7 .cbt].freeze
   PDF = '.pdf'
   AUDIOBOOK_SINGLE = %w[.m4b].freeze
-  AUDIO = %w[.m4a .mp3].freeze
-  # A single mp3 is not a book; a set of them probably is.
+  AUDIO = %w[.mp3 .m4a .aac .ogg .opus .wma .flac .ape .wav .aiff].freeze
+  # Formats that are essentially never audiobooks, and the sidecars of a CD rip.
+  MUSIC_ONLY = %w[.flac .ape .wav .aiff .cue .log].freeze
+  # With no other evidence, this many audio files is a book; fewer is a single.
   AUDIO_MIN_FILES = 3
   # PDFs are eBooks unless the name looks like a comic release.
   COMIC_NAME_HINT = /\b(comics?|graphic novel|digital|tpb|webrip|v\d{1,3}|#\d+|\d{3}\s*\(\d{4}\))\b/i
+  AUDIOBOOK_NAME_HINT = /\b(audio ?books?|unabridged|abridged|narrat(ed|or|ion)|read by|\d{2,3} ?kbps|64k)\b/i
+  MUSIC_NAME_HINT = /\b(flac|lossless|320|v0|v2|vinyl|album|ep|single|discography|soundtrack|ost|remaster(ed)?|deluxe|live|cd\d*|web|24 ?bit|16 ?bit)\b/i
+  CHAPTER_FILE_HINT = /\b(chapter|chap|ch|part|pt)\.?\s?\d+/i
 
-  # [kind, description] or nil. kind is 'ebook', 'comic' or 'audiobook'.
+  # [kind, description] or nil. kind is 'ebook', 'comic', 'audiobook' or 'music'.
   def self.classify(files, name)
     ext = files.group_by { |f| File.extname(f).downcase }
     count = lambda { |exts| exts.inject(0) { |n, e| n + (ext[e] || []).count } } # Array#sum needs Ruby 2.4
@@ -102,9 +107,23 @@ module OtherMedia
       return [kind, summary(ext, [PDF])]
     end
     return ['audiobook', summary(ext, AUDIOBOOK_SINGLE + AUDIO)] if count.call(AUDIOBOOK_SINGLE).positive?
-    return ['audiobook', summary(ext, AUDIO)] if count.call(AUDIO) >= AUDIO_MIN_FILES
+    return nil unless count.call(AUDIO).positive?
 
-    nil
+    [audio_kind(files, ext, name, count.call(AUDIO)), summary(ext, AUDIO)]
+  end
+
+  # Audiobook or music, for a download that is audio files. Each rule is a
+  # piece of evidence; the last one is the fallback.
+  def self.audio_kind(files, ext, name, audio_count)
+    return 'audiobook' if name =~ AUDIOBOOK_NAME_HINT
+    return 'music' if MUSIC_ONLY.any? { |e| ext.key?(e) }
+    return 'music' if name =~ MUSIC_NAME_HINT
+
+    audio = files.select { |f| AUDIO.include?(File.extname(f).downcase) }
+    chaptered = audio.count { |f| File.basename(f) =~ CHAPTER_FILE_HINT }
+    return 'audiobook' if chaptered * 2 >= audio.count && chaptered.positive?
+
+    audio_count >= AUDIO_MIN_FILES ? 'audiobook' : 'music'
   end
 
   def self.summary(ext, exts)
@@ -227,11 +246,11 @@ class TorrentHandler
   end
 
   # No video to file. Say what the download is, if it is something we
-  # recognise (books, comics, audiobooks), without moving anything.
+  # recognise (books, comics, audiobooks, music), without moving anything.
   def classify_other(files, rars, prefix = nil)
     kind, description = OtherMedia.classify(files, @torrent.name)
     if kind
-      label = { 'ebook' => 'eBook', 'comic' => 'Comic', 'audiobook' => 'Audiobook' }[kind]
+      label = { 'ebook' => 'eBook', 'comic' => 'Comic', 'audiobook' => 'Audiobook', 'music' => 'Music' }[kind]
       return Outcome.other(kind, [prefix, "#{label}: #{description}"].compact.join('; '), media_file: @torrent.path)
     end
     if rars.count > 1

@@ -110,14 +110,19 @@ Notifications you will get:
 
 - **TV ready / Movie ready** on every successful transfer, including season
   packs, where every episode is linked on its own file name.
-- **eBook / Comic / Audiobook downloaded** when the download is recognised as
-  one of those. Nothing is moved; the record, dashboard and web UI badge say
-  what it is. Rules: `cbr`/`cbz` means comic; `epub`/`mobi`/`azw` means eBook;
-  PDF only is a comic when the name looks like a comic release (`#12`, `v03`,
-  `(Digital)`, "comic", "TPB"), otherwise an eBook; an `m4b`, or three or more
-  `mp3`/`m4a` files, means audiobook (a music album will be called an
-  audiobook too; refine `OtherMedia` in `lib/torrent_handler.rb` if that matters).
-  Video always wins when both are present.
+- **eBook / Comic / Audiobook / Music downloaded** when the download is
+  recognised as one of those. Nothing is moved; the record, dashboard and web
+  UI badge say what it is. Rules: `cbr`/`cbz` means comic; `epub`/`mobi`/`azw`
+  means eBook; PDF only is a comic when the name looks like a comic release
+  (`#12`, `v03`, `(Digital)`, "comic", "TPB"), otherwise an eBook; an `m4b`
+  means audiobook. Other audio (`mp3`, `m4a`, `flac`, ...) is an audiobook or
+  music, decided by evidence in this order: the name says audiobook
+  ("Unabridged", "Narrated", "64kbps"); lossless formats or a `cue`/`log`
+  sidecar mean music; the name says music ("FLAC", "320", "Album", "Vinyl",
+  "OST", "Remastered"); most files are named like chapters ("Chapter 03",
+  "Part 2") means audiobook; otherwise three or more files is an audiobook
+  and fewer is music. Video always wins. Tune `OtherMedia` in
+  `lib/torrent_handler.rb` if a rule misfires.
 - **Transfer complete** when the download finished fine but there was nothing
   to file for Plex and it is none of the above: no media files, a name that is
   neither `S01E02` nor `Title.2004`, or an archive that extracted to nothing
@@ -153,7 +158,7 @@ Logs:
 
 Each line of `transfers.jsonl`:
 
-    ts, status (ok|other|error), outcome (tv|movie|ebook|comic|audiobook|no_media|multiple_media|unknown_media|error|no_torrent),
+    ts, status (ok|other|error), outcome (tv|movie|ebook|comic|audiobook|music|no_media|multiple_media|unknown_media|error|no_torrent),
     action (link|symlink|extract_link|extract_symlink|none), message, media_file, destination,
     torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro
 
