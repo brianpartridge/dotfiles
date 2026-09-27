@@ -1,168 +1,70 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
+#
+# Transmission "call script when download completes" hook.
+#
+# Reads the TR_TORRENT_* environment Transmission provides, hardlinks the media
+# where Plex will find it, records the outcome in the transfer log, sends a
+# Pushover notification and refreshes the dashboard.
+#
+# Point Transmission at torrent-finished.sh rather than this file: the wrapper
+# fixes PATH (Transmission launches scripts with a bare environment) and
+# captures stdout/stderr, so even a Ruby that fails to start leaves a trace.
+#
+# See README-transfers.md for setup.
 
-require_relative 'lib/episode_id'
 require 'fileutils'
 require 'logger'
-require_relative 'lib/movie_id'
-require 'set'
-require_relative 'lib/tweet'
-require 'uri'
-require_relative 'lib/utils'
+require_relative 'lib/notify'
+require_relative 'lib/torrent_handler'
+require_relative 'lib/transfer_dashboard'
+require_relative 'lib/transfer_log'
+
+$stdout.sync = true # keep stdout and stderr in order in the wrapper's capture file
 
 # Configuration
 MEDIA_ROOT = '/Users/theater/Media'
 TV_DIRECTORY = File.join(MEDIA_ROOT, 'tv')
 MOVIE_DIRECTORY = File.join(MEDIA_ROOT, 'movies')
+# Where eBooks, comics, audiobooks and music go. They are copied (not linked)
+# only when this script runs with --file-other; by default they are recorded
+# and the command to file them later is included in the notification, the log
+# and the dashboard.
+DROPBOX_MEDIA = File.expand_path(ENV['DROPBOX_MEDIA'] || '~/Dropbox/media')
+OTHER_DIRECTORIES = {
+  'comic' => File.join(DROPBOX_MEDIA, 'comics'),
+  'ebook' => File.join(DROPBOX_MEDIA, 'ebooks'),
+  'audiobook' => File.join(DROPBOX_MEDIA, 'audiobooks'),
+  'music' => File.join(DROPBOX_MEDIA, 'music')
+}.freeze
+FILE_OTHER_FLAG = '--file-other'
+LOG_FILE = ENV['TORRENT_FINISHED_LOG'] || '~/logs/torrent-finished.log'
+LOG_FILES = 10
+LOG_BYTES = 10 * 1024 * 1024 # per file; the previous 1024 discarded nearly everything
 
 # DO NOT MODIFY BELOW THIS LINE #
 
-$logger = Logger.new(File.expand_path('~/logs/torrent-finished.log'), 10, 10240)
-
-def info(msg)
-  puts msg
-  $logger.info msg
-end
-
-def warn(msg)
-  puts msg
-  $logger.warn msg
-end
-
-def error(msg)
-  puts msg
-  $logger.error msg
-end
-
-def fatal(msg)
-  puts msg
-  $logger.fatal msg
-end
-
-class Torrent
-  attr_reader :name, :hash, :directory
-
-  def initialize(name, directory)
-    @name = name
-    @directory = directory
+# Writes to the rotating log file and to stdout (which the wrapper captures).
+class TeeLogger
+  def initialize(logger)
+    @logger = logger
   end
 
-  def self.from_env
-    name = ENV['TR_TORRENT_NAME']
-    return nil if name.nil? || name.empty?
-
-    dir = ENV['TR_TORRENT_DIR']
-    return nil if dir.nil? || dir.empty?
-
-    Torrent.new(name, dir)
-  end
-
-  def files
-    download = File.join(@directory, @name)
-    if File.directory?(download)
-      Dir.entries(download).reject { |f| f.start_with?('.') }.map { |f| File.join(download, f) }
-    else
-      [download]
+  %i[info warn error fatal].each do |level|
+    define_method(level) do |message|
+      puts message
+      @logger.send(level, message)
     end
   end
 end
 
-class Handler
-  def initialize(torrent)
-    @torrent = torrent
-  end
-
-  def run!
-    name = @torrent.name
-    tweet "SUCCESS:Download #{name}"
-    media = @torrent.files.select { |f| File.valid_media_file?(f) }
-    rars = @torrent.files.select { |f| File.extname(f) == ".rar" }
-    handled = false
-    if media.empty? and rars.empty?
-      info "No media files found for #{name}"
-      tweet "WARNING:No Media - #{name}"
-      handled = true
-    elsif media.count == 1
-      path = media.first
-      handle_media_file(path, name)
-      handled = true
-    elsif media.count > 1
-      for path in media
-        handle_media_file(path, File.basename(path))
-      end
-      handled = true
-    elsif rars.count == 1
-      path = rars.first
-      directory = File.dirname(path)
-      info "Exracting #{path}"
-      before = Set.new(@torrent.files)
-      `cd #{directory} && unrar x #{path}`
-      after = Set.new(@torrent.files)
-      new = after - before
-      new_media = new.select { |f| File.valid_media_file?(f) }
-      info "New media #{new_media}"
-      if new_media.count == 1
-        media_file_path = new_media.first
-        handle_media_file(media_file_path, name)
-        handled = true
-      end
-    end
-
-    if !handled
-      error "Too many media or rar files #{media.count}, unable to determine primary file."
-      tweet "WARNING:Multiple Media Files - #{name}"
-    end
-  end
-
-  def handle_media_file(path, name)
-    filename = File.basename(path)
-    if !EpisodeID.from_release(name).nil?
-      info 'Found single episode'
-      link_file(path, TV_DIRECTORY)
-      tweet "SUCCESS:TV Show - #{filename}"
-    elsif !MovieID.from_release(name).nil?
-      info 'Found movie'
-      link_file(path, MOVIE_DIRECTORY)
-      tweet "SUCCESS:Movie - #{filename}"
-    else
-      error "Unsupported media #{path}"
-      tweet "WARNING:Unknown Media - #{filename}"
-    end
-  end
-
-  def copy_file(path, destination_directory)
-    info "Copying #{path} to #{destination_directory}"
-    FileUtils.copy(path, destination_directory)
-    info 'Copy complete'
-  end
-
-  def link_file(path, destination_directory)
-    filename = File.split(path).last
-    destination_path = File.join(destination_directory, filename)
-    info "Symlinking  #{path} to #{destination_path}"
-    FileUtils.ln_s(path, destination_path)
-    info 'Symlinking complete'
-  end
+def build_logger
+  path = File.expand_path(LOG_FILE)
+  FileUtils.mkdir_p(File.dirname(path))
+  TeeLogger.new(Logger.new(path, LOG_FILES, LOG_BYTES))
 end
 
-class File
-  def self.valid_media_file?(path)
-    file_name = File.basename(path)
-    return false if file_name.nil?
-    return false unless File.file?(path)
-
-    blacklist = ['sample']
-    if blacklist.reduce(false) { |acc, term| acc || file_name.downcase.include?(term) }
-      return false
-    end
-
-    valid_extensions = ['.mkv', '.avi', '.mov', '.mp4']
-    return false unless valid_extensions.include?(File.extname(file_name))
-
-    true
-  end
-end
-
+# The command line that re-runs this script for the same torrent.
 class Repro
   def self.cmd
     environment = ENV.keys.select { |k| k.start_with? 'TR_TORRENT_' }.sort.map { |k| "#{k}='#{ENV[k]}'" }.join(' ')
@@ -171,11 +73,82 @@ class Repro
   end
 end
 
-if $PROGRAM_NAME == __FILE__
-  info "STARTING: #{Repro.cmd}"
+# The command that files a recognised-but-unfiled download, or nil.
+def file_command(outcome)
+  return nil unless outcome.other? && OTHER_DIRECTORIES.key?(outcome.outcome)
+
+  "#{Repro.cmd} #{FILE_OTHER_FLAG}"
+end
+
+def notify_outcome(torrent, outcome)
+  name = torrent ? torrent.name : '(unknown torrent)'
+  kind = TorrentHandler::OTHER_LABELS[outcome.outcome]
+  case outcome.outcome
+  when 'tv'
+    Notify.push(outcome.message, title: 'TV ready')
+  when 'movie'
+    Notify.push(outcome.message, title: 'Movie ready')
+  when 'error', 'no_torrent'
+    Notify.push("#{name}\n#{outcome.message}", title: 'Transfer failed', priority: :high)
+  when 'ebook', 'comic', 'audiobook', 'music'
+    if outcome.ok?
+      Notify.push(outcome.message, title: "#{kind} filed")
+    else
+      # Informational only; the command to file it is on the dashboard.
+      Notify.push("#{name}\n#{outcome.message}", title: "#{kind} downloaded",
+                                                  url: TransferDashboard.url, url_title: 'Open the dashboard')
+    end
+  else
+    Notify.push("#{name}\n#{outcome.message}", title: 'Transfer complete')
+  end
+end
+
+def handle(torrent, log, file_other)
+  return Outcome.error('No torrent in environment (TR_TORRENT_NAME / TR_TORRENT_DIR missing)', outcome: 'no_torrent') if torrent.nil?
+
+  TorrentHandler.new(torrent, tv_directory: TV_DIRECTORY, movie_directory: MOVIE_DIRECTORY,
+                              other_directories: OTHER_DIRECTORIES, file_other: file_other, logger: log).run!
+rescue StandardError => e
+  log.error "#{e.class}: #{e.message}\n  #{Array(e.backtrace).first(10).join("\n  ")}"
+  Outcome.error("#{e.class}: #{e.message}", exception: e)
+end
+
+def main
+  log = build_logger
+  started = Time.now
+  file_other = ARGV.include?(FILE_OTHER_FLAG)
+  log.info "STARTING: #{Repro.cmd}#{file_other ? " #{FILE_OTHER_FLAG}" : ''}"
 
   torrent = Torrent.from_env
-  fatal 'ABORTING: No torrent found' unless torrent
+  outcome = handle(torrent, log, file_other)
+  duration = (Time.now - started).round(1)
+  log.send(outcome.error? ? :error : :info,
+           "#{outcome.status.upcase} (#{outcome.outcome}): #{outcome.message}")
 
-  Handler.new(torrent).run!
+  notified = notify_outcome(torrent, outcome)
+
+  record = outcome.to_h.merge(
+    'torrent' => torrent && torrent.to_h,
+    'duration_s' => duration,
+    'notified' => notified,
+    'repro' => Repro.cmd,
+    'file_command' => file_command(outcome)
+  )
+  log.info "To file it later: #{record['file_command']}" if record['file_command']
+  begin
+    TransferLog.new.append(record)
+  rescue StandardError => e
+    log.error "Failed to record transfer: #{e.class}: #{e.message}"
+  end
+
+  begin
+    TransferDashboard.generate(quiet: true)
+  rescue StandardError => e
+    log.error "Failed to regenerate dashboard: #{e.class}: #{e.message}"
+  end
+
+  log.info "FINISHED: #{outcome.status} in #{duration}s"
+  outcome.error? ? 1 : 0
 end
+
+exit main if $PROGRAM_NAME == __FILE__

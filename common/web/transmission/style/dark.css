@@ -1,0 +1,85 @@
+/* Dark theme. Applied when <html> has class "dark", which javascript/extras/theme.js
+   sets from the system preference (prefers-color-scheme) or the footer toggle.
+   Everything upstream stays as it is; these rules only override colours. */
+
+html.dark { color-scheme: dark; }
+html.dark body { background: #1a1a19; color: #d6d5cc; }
+
+/* Chrome: toolbar, status bar, footer */
+html.dark div#toolbar,
+html.dark #statusbar,
+html.dark div.torrent_footer {
+  background-color: #2b2b2a;
+  background-image: linear-gradient(to bottom, #353534, #242423);
+  border-color: #4a4a48;
+}
+html.dark div#toolbar > *,
+html.dark div#toolbar > div#toolbar-separator { border-color: #4a4a48; }
+html.dark #statusbar { color: #c3c2b7; }
+html.dark #statusbar #filter input#torrent_search { background: #161615; color: #d6d5cc; border: 1px solid #555; }
+html.dark #statusbar #filter input#torrent_search.blur { color: #777; }
+html.dark #statusbar #speed-info { color: #c3c2b7; }
+
+/* Torrent list */
+html.dark ul.torrent_list li.torrent { background-color: #1a1a19; border-bottom-color: #333332; color: #9a9990; }
+html.dark ul.torrent_list li.torrent.even { background-color: #202020; }
+html.dark ul.torrent_list li.torrent.selected { background-color: #2c3a5c; }
+html.dark ul.torrent_list li.torrent div.torrent_name,
+html.dark ul.torrent_list li.torrent.compact div.torrent_name { color: #f0efe8; }
+html.dark ul.torrent_list li.torrent div.torrent_name.paused { color: #7d7c75; }
+html.dark ul.torrent_list li.torrent div.torrent_peer_details.error { color: #ff6b6b; }
+html.dark ul.torrent_list li.torrent.selected div.torrent_progress_details.error,
+html.dark ul.torrent_list li.torrent.selected div.torrent_peer_details.error { color: #ffb3b3; }
+/* Progress bars keep their coloured fills; dim the light grey track and the paused/magnet greys. */
+html.dark ul.torrent_list div.torrent_progress_bar.incomplete { filter: brightness(0.45); }
+html.dark ul.torrent_list div.torrent_progress_bar.complete.paused { filter: brightness(0.7); border-color: #6a6a68; }
+html.dark ul.torrent_list div.torrent_progress_bar.incomplete.paused,
+html.dark ul.torrent_list div.torrent_progress_bar.incomplete.leeching,
+html.dark ul.torrent_list div.torrent_progress_bar.incomplete.leeching.queued { border-color: #555; }
+html.dark ul.torrent_list li.torrent a div { filter: invert(1); }
+
+/* Inspector */
+html.dark div#torrent_inspector { background: #1f1f1e; color: #d6d5cc; border-left-color: #4a4a48; }
+html.dark div#torrent_inspector a { color: #7fb0f5; }
+html.dark div#torrent_inspector #inspector-tabs-wrapper #inspector-tabs > * { filter: invert(1) hue-rotate(180deg); border-color: #444; }
+html.dark div#torrent_inspector #inspector_file_list { border-top-color: #444; }
+html.dark div#torrent_inspector table,
+html.dark div#torrent_inspector th,
+html.dark div#torrent_inspector td { border-color: #3a3a38; }
+html.dark div.file-priority-radiobox > div { filter: invert(1) hue-rotate(180deg); }
+
+/* Footer buttons: icons are black glyphs on a light background; invert the button. */
+html.dark div.torrent_footer > div { filter: invert(1) hue-rotate(180deg); border-color: #555; }
+
+/* Transmission's own dialogs (confirm/remove, add torrent) */
+html.dark div.dialog_container { color: #d6d5cc; }
+html.dark div.dialog_container div.dialog_window { background-color: #2a2a29; color: #d6d5cc; }
+html.dark div.dialog_container div.dialog_window h2.dialog_heading { color: #f0efe8; }
+html.dark div.dialog_container div.dialog_window a { background-color: #383837; border-color: #666; color: #e6e5dd; }
+html.dark div.dialog_container div.dialog_window a:active { background: #2c3a5c; }
+
+/* jQuery UI widgets: preferences, statistics, about, context menu */
+html.dark .ui-widget-content { background: #242423; border-color: #4a4a48; color: #d6d5cc; }
+html.dark .ui-widget-content a { color: #7fb0f5; }
+html.dark .ui-widget-header { background: #333332; border-color: #4a4a48; color: #f0efe8; }
+html.dark .ui-state-default,
+html.dark .ui-widget-content .ui-state-default,
+html.dark .ui-widget-header .ui-state-default { background: #333332; border-color: #555; color: #c3c2b7; }
+html.dark .ui-state-hover, html.dark .ui-state-focus,
+html.dark .ui-widget-content .ui-state-hover, html.dark .ui-widget-content .ui-state-focus,
+html.dark .ui-widget-header .ui-state-hover, html.dark .ui-widget-header .ui-state-focus { background: #3e3e3d; border-color: #777; color: #fff; }
+html.dark .ui-state-active,
+html.dark .ui-widget-content .ui-state-active,
+html.dark .ui-widget-header .ui-state-active { background: #2c3a5c; border-color: #56688f; color: #fff; }
+html.dark .ui-widget-overlay { background: #000; opacity: 0.6; }
+html.dark .ui-dialog .ui-dialog-titlebar-close { filter: invert(1); }
+
+/* Form controls, for browsers without color-scheme support */
+html.dark input[type="text"], html.dark input[type="search"], html.dark input[type="number"],
+html.dark input[type="url"], html.dark textarea, html.dark select {
+  background-color: #161615; color: #d6d5cc; border: 1px solid #555;
+}
+
+/* Extras */
+html.dark ul.torrent_list li.torrent a.transfer_badge { color: #fff; }
+html.dark ul.torrent_list li.torrent a.transfer_badge.other { background: #6f6e68; }
