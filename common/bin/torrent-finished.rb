@@ -94,10 +94,9 @@ def notify_outcome(torrent, outcome)
     if outcome.ok?
       Notify.push(outcome.message, title: "#{kind} filed")
     else
-      body = "#{name}\n#{outcome.message}"
-      command = file_command(outcome)
-      body += "\n\nTo file it into #{OTHER_DIRECTORIES[outcome.outcome]}:\n#{command}" if command
-      Notify.push(body, title: "#{kind} downloaded")
+      # Informational only; the command to file it is on the dashboard.
+      Notify.push("#{name}\n#{outcome.message}", title: "#{kind} downloaded",
+                                                  url: TransferDashboard.url, url_title: 'Open the dashboard')
     end
   else
     Notify.push("#{name}\n#{outcome.message}", title: 'Transfer complete')

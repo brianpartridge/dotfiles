@@ -123,10 +123,10 @@ Notifications you will get:
   "Part 2") means audiobook; otherwise three or more files is an audiobook
   and fewer is music. Video always wins. Tune `OtherMedia` in
   `lib/torrent_handler.rb` if a rule misfires.
-  These are not filed automatically. The notification, the log and the
-  dashboard carry the exact command that copies the download, as it is (a
-  single file or the whole directory), into `~/Dropbox/media/comics`,
-  `ebooks`, `audiobooks` or `music`:
+  These are not filed automatically. The dashboard (and the log) carry the
+  exact command that copies the download, as it is (a single file or the
+  whole directory), into `~/Dropbox/media/comics`, `ebooks`, `audiobooks` or
+  `music`; the notification just links to the dashboard:
 
       /usr/bin/env TR_TORRENT_DIR='...' TR_TORRENT_NAME='...' ruby ~/bin/torrent-finished.rb --file-other
 
