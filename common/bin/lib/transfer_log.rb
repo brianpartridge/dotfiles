@@ -13,10 +13,11 @@ require 'time'
 #   status      "ok" (filed for Plex) | "other" (finished, nothing to file) | "error"
 #   outcome     "tv" | "movie" | "no_media" | "multiple_media" |
 #               "unknown_media" | "error" | "no_torrent"
-#   action      "link" | "extract_link" | "none"
+#   action      "link" (hardlink) | "symlink" (different volume) | "extract_link" |
+#               "extract_symlink" | "none"
 #   message     human readable summary
 #   media_file  path of the file that was filed (the torrent directory for a set)
-#   destination the symlink that was created (its directory for a set)
+#   destination the link that was created (its directory for a set)
 #   torrent     { name, directory, hash, id } as reported by Transmission
 #   error       { class, message, backtrace } when an exception occurred
 #   duration_s  seconds the handler took

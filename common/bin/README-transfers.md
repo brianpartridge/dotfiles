@@ -8,7 +8,8 @@ about it, and how to see what happened to recent transfers.
 | File | Role |
 |---|---|
 | `torrent-finished.sh` | What Transmission calls. Fixes `PATH`, captures all output to `~/logs/torrent-finished.out`, runs the Ruby script. |
-| `torrent-finished.rb` | Symlinks the media into the TV or movies folder (each file on its own name for season packs), records the outcome, notifies, refreshes the dashboard. Exit 1 on error. |
+| `torrent-finished.rb` | Hardlinks the media into the TV or movies folder (each file on its own name for season packs), records the outcome, notifies, refreshes the dashboard. Exit 1 on error. |
+| `media-hardlinks.rb` | One-time conversion of the old symlinks in the library into hardlinks. Dry run unless `--apply`. |
 | `lib/torrent_handler.rb` | The filing logic, testable on its own. |
 | `lib/transfer_log.rb` | Append-only JSONL record of every run: `~/logs/transfers.jsonl`. The dashboard reads this, not the text log. |
 | `lib/notify.rb` | Pushover client. Never raises. `lib/tweet.rb` now delegates here, so `tvrss.rb` and `wishlist-downloader.rb` notify too. |
@@ -81,6 +82,23 @@ for that reason. For a manual test, call it explicitly:
 
     /usr/local/bin/ruby ~/bin/transfers-dashboard.rb --digest
 
+## Why hardlinks
+
+The library entry and the torrent's file are two names for the same data, so
+removing the torrent (with or without its data) leaves the item in Plex, and
+deleting the item from the library leaves the torrent seeding. No extra disk
+space is used. This needs both to be on the same volume; when they are not,
+the handler falls back to a symlink and says so in the record and the
+notification ("Symlinked ... (different volume)").
+
+Existing symlinks from before this change can be converted in place, without
+touching Transmission:
+
+    ~/bin/media-hardlinks.rb            # dry run
+    ~/bin/media-hardlinks.rb --apply
+
+Dangling symlinks (target already gone) are reported and left alone.
+
 ## Day to day
 
     transfers-dashboard.rb            # regenerate the HTML
@@ -128,7 +146,7 @@ Logs:
 Each line of `transfers.jsonl`:
 
     ts, status (ok|other|error), outcome (tv|movie|no_media|multiple_media|unknown_media|error|no_torrent),
-    action (link|extract_link|none), message, media_file, destination,
+    action (link|symlink|extract_link|extract_symlink|none), message, media_file, destination,
     torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro
 
 ## Tests

@@ -138,8 +138,9 @@ class Outcome
   end
 end
 
-# Symlinks a completed torrent's media where Plex will find it, so the
-# torrent can keep seeding from where it is.
+# Hardlinks a completed torrent's media where Plex will find it, so the
+# torrent keeps seeding from where it is and removing either side leaves the
+# other intact.
 #
 # Raises for genuine failures (destination volume missing, link blocked, unrar
 # failed); the caller turns those into an error Outcome so they are recorded
@@ -228,16 +229,17 @@ class TorrentHandler
   def handle_media(path, extracted: false, by_filename: false)
     filename = File.basename(path)
     kind = by_filename ? classify(filename) : (classify(@torrent.name) || classify(filename))
-    action = extracted ? 'extract_link' : 'link'
     case kind
     when :tv
       @log.info "Found episode: #{filename}"
-      destination, note = link_file(path, @tv_directory)
-      Outcome.ok('tv', "#{note} #{filename} into #{@tv_directory}", action: action, media_file: path, destination: destination)
+      destination, note, action = link_file(path, @tv_directory)
+      Outcome.ok('tv', "#{note} #{filename} into #{@tv_directory}",
+                 action: extracted ? "extract_#{action}" : action, media_file: path, destination: destination)
     when :movie
       @log.info "Found movie: #{filename}"
-      destination, note = link_file(path, @movie_directory)
-      Outcome.ok('movie', "#{note} #{filename} into #{@movie_directory}", action: action, media_file: path, destination: destination)
+      destination, note, action = link_file(path, @movie_directory)
+      Outcome.ok('movie', "#{note} #{filename} into #{@movie_directory}",
+                 action: extracted ? "extract_#{action}" : action, media_file: path, destination: destination)
     else
       Outcome.other('unknown_media', "'#{by_filename ? filename : @torrent.name}' is not a TV episode or a movie",
                     media_file: path)
@@ -250,24 +252,46 @@ class TorrentHandler
     raise "Destination directory is missing (volume not mounted?): #{directory}"
   end
 
-  # Returns [destination, note]
+  # Hardlinks the file into the destination directory, so the library and
+  # the torrent share one set of bytes and either can be deleted without
+  # affecting the other. Falls back to a symlink when the destination is on a
+  # different volume, where a hardlink is not possible.
+  #
+  # Returns [destination, note, action]
   def link_file(path, directory)
     ensure_directory(directory)
     destination = File.join(directory, File.basename(path))
-    if File.symlink?(destination)
-      if File.readlink(destination) == path
-        @log.info "Already linked: #{destination}"
-        return [destination, 'Already linked']
-      end
-      @log.info "Replacing stale symlink #{destination}"
-      FileUtils.ln_sf(path, destination)
-      return [destination, 'Relinked']
-    end
-    raise "Destination already exists and is not a symlink: #{destination}" if File.exist?(destination)
 
-    @log.info "Symlinking #{path} to #{destination}"
-    FileUtils.ln_s(path, destination)
-    @log.info 'Symlinking complete'
-    [destination, 'Linked']
+    if File.symlink?(destination)
+      # A link from the old symlink scheme, or a stale one: replace it.
+      note = File.exist?(destination) ? 'Relinked' : 'Replaced stale link with'
+      @log.info "#{note} #{destination}"
+      return hardlink(path, destination, note)
+    end
+    if File.exist?(destination)
+      if File.identical?(path, destination)
+        @log.info "Already linked: #{destination}"
+        return [destination, 'Already linked', 'link']
+      end
+      raise "Destination already exists and is a different file: #{destination}"
+    end
+
+    hardlink(path, destination, 'Linked')
+  end
+
+  def hardlink(path, destination, note)
+    tmp = "#{destination}.linking"
+    File.unlink(tmp) if File.symlink?(tmp) || File.exist?(tmp)
+    begin
+      File.link(path, tmp)
+    rescue Errno::EXDEV
+      @log.info "#{destination} is on a different volume; symlinking instead"
+      File.symlink(path, tmp)
+      File.rename(tmp, destination) # replaces any existing symlink atomically
+      return [destination, "#{note.sub('Linked', 'Symlinked')} (different volume)", 'symlink']
+    end
+    File.rename(tmp, destination)
+    @log.info "Hardlinked #{path} to #{destination}"
+    [destination, note, 'link']
   end
 end

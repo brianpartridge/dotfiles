@@ -3,7 +3,7 @@
 #
 # Transmission "call script when download completes" hook.
 #
-# Reads the TR_TORRENT_* environment Transmission provides, symlinks the media
+# Reads the TR_TORRENT_* environment Transmission provides, hardlinks the media
 # where Plex will find it, records the outcome in the transfer log, sends a
 # Pushover notification and refreshes the dashboard.
 #

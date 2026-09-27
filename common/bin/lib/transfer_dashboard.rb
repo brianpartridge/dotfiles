@@ -297,7 +297,9 @@ module TransferDashboard
       when 'copy' then 'copied to'
       when 'extract_copy' then 'extracted and copied to'
       when 'link' then 'linked into'
+      when 'symlink' then 'symlinked into'
       when 'extract_link' then 'extracted and linked into'
+      when 'extract_symlink' then 'extracted and symlinked into'
       end
     end
 

@@ -86,7 +86,7 @@ describe TorrentHandler do
     TorrentHandler.new(Torrent.new(name, @dl), tv_directory: @tv, movie_directory: @movies, logger: null_logger)
   end
 
-  it 'symlinks a TV episode so the torrent keeps seeding' do
+  it 'hardlinks a TV episode so the torrent keeps seeding' do
     name = 'Some.Show.S02E05.720p.HDTV-GRP'
     media = touch(File.join(@dl, name, "#{name}.mkv"), 'video')
     touch(File.join(@dl, name, "#{name}.nfo"))
@@ -95,8 +95,21 @@ describe TorrentHandler do
     expect(o.outcome).to eq('tv')
     expect(o.action).to eq('link')
     expect(o.destination).to eq(File.join(@tv, "#{name}.mkv"))
-    expect(File.readlink(o.destination)).to eq(media)
+    expect(File.symlink?(o.destination)).to be false
+    expect(File.identical?(media, o.destination)).to be true
+    expect(File.stat(media).nlink).to eq(2)
     expect(o.message).to start_with('Linked')
+  end
+
+  it 'leaves the library copy intact when the torrent data is deleted, and vice versa' do
+    name = 'Some.Movie.1999.1080p.BluRay-GRP'
+    media = touch(File.join(@dl, name, "#{name}.mkv"), 'video')
+    library = handler(name).run!.destination
+    FileUtils.rm_rf(File.join(@dl, name))
+    expect(File.read(library)).to eq('video')
+    touch(media, 'video')
+    File.unlink(library)
+    expect(File.read(media)).to eq('video')
   end
 
   it 'falls back to the file name when the torrent name does not classify' do
@@ -106,30 +119,49 @@ describe TorrentHandler do
     expect(o.destination).to eq(File.join(@tv, 'Some.Show.S02E05.720p.mkv'))
   end
 
-  it 'symlinks a movie' do
+  it 'hardlinks a movie' do
     name = 'Some.Movie.1999.1080p.BluRay-GRP'
     media = touch(File.join(@dl, name, "#{name}.mkv"))
     o = handler(name).run!
     expect(o.outcome).to eq('movie')
     expect(o.action).to eq('link')
-    expect(File.readlink(o.destination)).to eq(media)
+    expect(File.identical?(media, o.destination)).to be true
   end
 
-  it 'is idempotent for an already linked movie and replaces a stale link' do
+  it 'is idempotent, and upgrades a symlink from the old scheme in place' do
     name = 'Some.Movie.1999.1080p.BluRay-GRP'
-    touch(File.join(@dl, name, "#{name}.mkv"))
+    media = touch(File.join(@dl, name, "#{name}.mkv"))
     expect(handler(name).run!.message).to start_with('Linked')
     expect(handler(name).run!.message).to start_with('Already linked')
-    File.unlink(File.join(@movies, "#{name}.mkv"))
-    File.symlink('/nowhere', File.join(@movies, "#{name}.mkv"))
+    library = File.join(@movies, "#{name}.mkv")
+    File.unlink(library)
+    File.symlink(media, library)
     expect(handler(name).run!.message).to start_with('Relinked')
+    expect(File.symlink?(library)).to be false
+    expect(File.identical?(media, library)).to be true
+    File.unlink(library)
+    File.symlink('/nowhere', library)
+    expect(handler(name).run!.message).to start_with('Replaced stale link with')
+    expect(File.identical?(media, library)).to be true
   end
 
-  it 'raises, rather than silently failing, when a real file blocks the link' do
+  it 'falls back to a symlink across volumes and says so' do
+    name = 'Some.Movie.1999.1080p.BluRay-GRP'
+    media = touch(File.join(@dl, name, "#{name}.mkv"))
+    allow(File).to receive(:link).and_raise(Errno::EXDEV)
+    o = handler(name).run!
+    expect(o.action).to eq('symlink')
+    expect(o.message).to start_with('Symlinked').and include('different volume')
+    expect(File.symlink?(o.destination)).to be true
+    expect(File.readlink(o.destination)).to eq(media)
+    expect(Dir.glob(File.join(@movies, '*.linking'))).to eq([])
+  end
+
+  it 'raises, rather than silently failing, when a different file blocks the link' do
     name = 'Some.Movie.1999.1080p.BluRay-GRP'
     touch(File.join(@dl, name, "#{name}.mkv"))
-    touch(File.join(@movies, "#{name}.mkv"))
-    expect { handler(name).run! }.to raise_error(/not a symlink/)
+    touch(File.join(@movies, "#{name}.mkv"), 'something else')
+    expect { handler(name).run! }.to raise_error(/different file/)
   end
 
   it 'raises when the destination volume is missing' do
@@ -159,6 +191,7 @@ describe TorrentHandler do
     expect(o.destination).to eq(@tv)
     expect(o.message).to eq("Linked 2 of 2 media files (tv) into #{@tv}")
     expect(entries(@tv)).to eq(%w[Some.Show.S02E01.720p.mkv Some.Show.S02E02.720p.mkv])
+    expect(File.stat(File.join(@tv, 'Some.Show.S02E01.720p.mkv')).nlink).to eq(2)
   end
 
   it 'does not let a year in a pack name turn episodes into movies' do
