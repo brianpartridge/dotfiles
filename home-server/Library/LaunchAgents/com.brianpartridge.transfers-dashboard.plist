@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Regenerates ~/Dropbox/transfers/index.html every 30 minutes so the
+  "in progress" and "unhandled" sections stay fresh between downloads.
+
+  Load with:  launchctl load ~/Library/LaunchAgents/com.brianpartridge.transfers-dashboard.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.brianpartridge.transfers-dashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/theater/bin/transfers-dashboard.rb</string>
+    <string>--quiet</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>1800</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/theater/logs/transfers-dashboard.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/theater/logs/transfers-dashboard.out</string>
+</dict>
+</plist>
