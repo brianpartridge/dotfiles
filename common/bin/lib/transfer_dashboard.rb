@@ -419,7 +419,7 @@ module TransferDashboard
         .tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
         .tile .label { font-size: 12px; color: var(--text-2); }
         .tile .value { font-size: 30px; font-weight: 600; line-height: 1.15; margin-top: 4px; }
-        .tile .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; word-break: break-all; }
+        .tile .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; overflow-wrap: anywhere; }
         .tile .meter { margin-top: 8px; }
         .tile.low .meter span { background: var(--warning); }
         .tile.fail .meter span { background: var(--critical); }
