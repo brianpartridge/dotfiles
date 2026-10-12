@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
 require 'cgi'
+require 'English'
 require 'erb'
 require 'fileutils'
 require 'json'
 require 'set'
+require 'shellwords'
 require 'socket'
 require 'time'
 require_relative 'notify'
@@ -50,22 +52,73 @@ module TransferDashboard
     'no_torrent' => 'No torrent info'
   }.freeze
 
+  # Free space on the volume holding a directory, from df, which is on every
+  # Mac and Linux box. Sizes in bytes; nil when df cannot answer.
+  module DiskSpace
+    def self.for(directory)
+      return nil if directory.to_s.empty? || !File.directory?(directory)
+
+      lines = `df -Pk #{Shellwords.escape(directory)} 2>/dev/null`.lines
+      return nil unless $CHILD_STATUS.success? && lines.count >= 2
+
+      fields = lines.last.split
+      return nil if fields.count < 6
+
+      total, used, free = fields[1, 3].map { |kb| kb.to_i * 1024 }
+      { 'directory' => directory, 'mount' => fields[5..-1].join(' '), 'total' => total, 'used' => used, 'free' => free }
+    end
+  end
+
+  # Below these the free-space tile turns amber, then red.
+  LOW_SPACE_FRACTION = 0.15
+  CRITICAL_SPACE_FRACTION = 0.05
+  CRITICAL_SPACE_BYTES = 10 * 1000 * 1000 * 1000
+
   # Everything the dashboard shows, gathered once.
   class Report
-    attr_reader :records, :torrents, :rpc_error, :generated_at
+    attr_reader :records, :torrents, :rpc_error, :generated_at, :disk
 
-    def initialize(log: TransferLog.new, rpc: TransmissionRPC.from_config, limit: RECENT_LIMIT, now: Time.now)
+    def initialize(log: TransferLog.new, rpc: TransmissionRPC.from_config, limit: RECENT_LIMIT, now: Time.now,
+                   disk_space: DiskSpace.method(:for))
       @generated_at = now
       @records = log.records(limit: limit).map do |r|
         r.merge('status' => LEGACY_STATUSES.fetch(r['status'], r['status']))
       end
       @torrents = []
       @rpc_error = nil
+      session = {}
       begin
         @torrents = rpc.torrents
+        session = rpc.session
       rescue TransmissionRPC::Error => e
         @rpc_error = e.message
       end
+      @disk = disk_for(session, disk_space)
+    end
+
+    # df on Transmission's download directory, falling back to the free
+    # space Transmission itself reports (which has no total).
+    def disk_for(session, disk_space)
+      directory = session['download-dir'].to_s
+      info = disk_space.call(directory)
+      return info if info
+
+      free = session['download-dir-free-space'].to_i
+      return nil if directory.empty? || free <= 0
+
+      { 'directory' => directory, 'mount' => nil, 'total' => nil, 'used' => nil, 'free' => free }
+    end
+
+    def disk_level
+      return nil unless @disk
+
+      free = @disk['free']
+      total = @disk['total']
+      fraction = total && total.positive? ? free.to_f / total : nil
+      return 'critical' if free < CRITICAL_SPACE_BYTES || (fraction && fraction < CRITICAL_SPACE_FRACTION)
+      return 'low' if fraction && fraction < LOW_SPACE_FRACTION
+
+      'ok'
     end
 
     def records_since(seconds)
@@ -181,6 +234,15 @@ module TransferDashboard
     Text.new(report, limit: limit).render
   end
 
+  def size_label(bytes)
+    bytes = bytes.to_f
+    return format('%.2f TB', bytes / 1e12) if bytes >= 1e12
+    return format('%.1f GB', bytes / 1e9) if bytes >= 1e9
+    return format('%.0f MB', bytes / 1e6) if bytes >= 1e6
+
+    format('%.0f KB', bytes / 1e3)
+  end
+
   def status_glyph(status)
     { 'ok' => '✓', 'other' => '–', 'error' => '✕' }.fetch(status, '?')
   end
@@ -213,6 +275,13 @@ module TransferDashboard
       week = @report.counts(WEEK)
       out << "Transfers (last 7 days): #{week['ok']} filed, #{week['other']} other, #{week['error']} failed"
       out << "Transmission: #{@report.rpc_error ? "unreachable (#{@report.rpc_error})" : "#{@report.completed.count} complete, #{@report.active.count} active"}"
+      if (disk = @report.disk)
+        line = "Free space: #{TransferDashboard.size_label(disk['free'])}"
+        line += " of #{TransferDashboard.size_label(disk['total'])}" if disk['total']
+        line += " on #{disk['mount'] || disk['directory']}"
+        line += " (LOW)" if @report.disk_level != 'ok'
+        out << line
+      end
 
       unhandled = @report.unhandled
       unless unhandled.empty?
@@ -285,11 +354,7 @@ module TransferDashboard
     end
 
     def size_label(bytes)
-      bytes = bytes.to_f
-      return format('%.1f GB', bytes / 1e9) if bytes >= 1e9
-      return format('%.0f MB', bytes / 1e6) if bytes >= 1e6
-
-      format('%.0f KB', bytes / 1e3)
+      TransferDashboard.size_label(bytes)
     end
 
     # ERB.new grew keyword arguments in Ruby 2.6; the macOS system Ruby (2.3)
@@ -354,6 +419,11 @@ module TransferDashboard
         .tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
         .tile .label { font-size: 12px; color: var(--text-2); }
         .tile .value { font-size: 30px; font-weight: 600; line-height: 1.15; margin-top: 4px; }
+        .tile .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; word-break: break-all; }
+        .tile .meter { margin-top: 8px; }
+        .tile.low .meter span { background: var(--warning); }
+        .tile.fail .meter span { background: var(--critical); }
+        .tile.low .value::before { background: var(--warning); }
         .tile.other .value::before, .tile.fail .value::before, .tile.ok .value::before {
           display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 8px 4px 0; content: "";
         }
@@ -401,6 +471,20 @@ module TransferDashboard
           <div class="tile other"><div class="label">Other, 7 days</div><div class="value"><%= week['other'] %></div></div>
           <div class="tile fail"><div class="label">Failed, 7 days</div><div class="value"><%= week['error'] %></div></div>
           <div class="tile <%= unhandled.empty? ? '' : 'fail' %>"><div class="label">Complete but unhandled, <%= UNHANDLED_WINDOW / DAY %> days</div><div class="value"><%= @report.rpc_error ? '?' : unhandled.count %></div></div>
+          <%- if (disk = @report.disk) -%>
+          <%- level = @report.disk_level -%>
+          <div class="tile <%= { 'ok' => 'ok', 'low' => 'low', 'critical' => 'fail' }[level] %>">
+            <div class="label">Free on downloads volume</div>
+            <div class="value"><%= h(size_label(disk['free'])) %></div>
+            <%- if disk['total'] -%>
+            <%- used_pct = ((disk['used'].to_f / disk['total']) * 100).round -%>
+            <div class="meter" role="progressbar" aria-label="Used" aria-valuenow="<%= used_pct %>" aria-valuemin="0" aria-valuemax="100"><span style="width: <%= used_pct %>%"></span></div>
+            <div class="sub"><%= h(size_label(disk['used'])) %> of <%= h(size_label(disk['total'])) %> used · <%= h(disk['mount']) %></div>
+            <%- else -%>
+            <div class="sub"><%= h(disk['directory']) %> (as reported by Transmission)</div>
+            <%- end -%>
+          </div>
+          <%- end -%>
         </section>
 
         <%- if @report.rpc_error -%>

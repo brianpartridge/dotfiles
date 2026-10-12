@@ -53,6 +53,11 @@ class TransmissionRPC
     call('torrent-get', 'fields' => TORRENT_FIELDS).fetch('torrents', [])
   end
 
+  # Session settings, including 'download-dir' and 'download-dir-free-space'.
+  def session
+    call('session-get')
+  end
+
   # Raises TransmissionRPC::Error for any transport or protocol failure.
   def call(method, arguments = {})
     body = JSON.generate('method' => method, 'arguments' => arguments)

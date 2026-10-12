@@ -154,6 +154,7 @@ Notifications you will get:
 | Dashboard lists "complete but unhandled" (torrents that finished in the last 7 days with no record) | `~/logs/torrent-finished.out`. If there is no entry for that torrent, Transmission never ran the script (check the preference and that the `.sh` is executable). If there is an entry but it stops short, that output is the crash. |
 | No notifications at all | `~/logs/torrent-finished.out` will contain `[notify] ...` lines explaining why (missing config, HTTP error). |
 | Dashboard 404s or is not reachable | `sudo apachectl status` or `curl -I http://localhost/transfers/` on the Mac; make sure the launch daemon was loaded with `-w` so Apache survives a reboot. |
+| Free-space tile missing | It needs Transmission's remote access (the download folder comes from `session-get`); the figures come from `df` on that folder, or from Transmission's own number when `df` cannot run. |
 | Dashboard shows "Transmission unreachable" | Remote access is off, or `transmission.json` is wrong. Everything else still works. |
 
 Logs:
