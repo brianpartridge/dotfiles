@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Runs transfers-worker.rb whenever the dashboard's request queue is non-empty
+  (QueueDirectories), so dashboard buttons do their work as this user, in the
+  background, without any long-running process.
+
+  Load with:  launchctl load ~/Library/LaunchAgents/com.brianpartridge.transfers-worker.plist
+  The queue directory must exist and be world-writable: mkdir -p ~/logs/transfers-queue && chmod 1777 ~/logs/transfers-queue
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.brianpartridge.transfers-worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/theater/bin/transfers-worker.rb</string>
+  </array>
+  <key>QueueDirectories</key>
+  <array>
+    <string>/Users/theater/logs/transfers-queue</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/theater/logs/transfers-worker.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/theater/logs/transfers-worker.out</string>
+</dict>
+</plist>

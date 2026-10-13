@@ -19,6 +19,11 @@ describe TransmissionRPC do
     expect(rpc.instance_variable_get(:@session_id)).to eq('sess')
   end
 
+  it 'fetches the session' do
+    allow(rpc).to receive(:post).and_return(FakeResponse.new('200', '{"result":"success","arguments":{"download-dir":"/dl","download-dir-free-space":123}}', {}))
+    expect(rpc.session).to eq('download-dir' => '/dl', 'download-dir-free-space' => 123)
+  end
+
   it 'wraps connection failures in Error' do
     allow(rpc).to receive(:post).and_raise(Errno::ECONNREFUSED)
     expect { rpc.torrents }.to raise_error(TransmissionRPC::Error, /ECONNREFUSED/)

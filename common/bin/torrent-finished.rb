@@ -15,6 +15,7 @@
 
 require 'fileutils'
 require 'logger'
+require_relative 'lib/media_config'
 require_relative 'lib/notify'
 require_relative 'lib/torrent_handler'
 require_relative 'lib/transfer_dashboard'
@@ -22,21 +23,14 @@ require_relative 'lib/transfer_log'
 
 $stdout.sync = true # keep stdout and stderr in order in the wrapper's capture file
 
-# Configuration
-MEDIA_ROOT = '/Users/theater/Media'
-TV_DIRECTORY = File.join(MEDIA_ROOT, 'tv')
-MOVIE_DIRECTORY = File.join(MEDIA_ROOT, 'movies')
+# Configuration lives in lib/media_config.rb.
+MEDIA_ROOT = MediaConfig::MEDIA_ROOT
+TV_DIRECTORY = MediaConfig::TV_DIRECTORY
+MOVIE_DIRECTORY = MediaConfig::MOVIE_DIRECTORY
 # Where eBooks, comics, audiobooks and music go. They are copied (not linked)
 # only when this script runs with --file-other; by default they are recorded
-# and the command to file them later is included in the notification, the log
-# and the dashboard.
-DROPBOX_MEDIA = File.expand_path(ENV['DROPBOX_MEDIA'] || '~/Dropbox/media')
-OTHER_DIRECTORIES = {
-  'comic' => File.join(DROPBOX_MEDIA, 'comics'),
-  'ebook' => File.join(DROPBOX_MEDIA, 'ebooks'),
-  'audiobook' => File.join(DROPBOX_MEDIA, 'audiobooks'),
-  'music' => File.join(DROPBOX_MEDIA, 'music')
-}.freeze
+# and the command to file them later is shown on the dashboard.
+OTHER_DIRECTORIES = MediaConfig::OTHER_DIRECTORIES
 FILE_OTHER_FLAG = '--file-other'
 LOG_FILE = ENV['TORRENT_FINISHED_LOG'] || '~/logs/torrent-finished.log'
 LOG_FILES = 10

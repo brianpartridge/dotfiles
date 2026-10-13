@@ -15,7 +15,10 @@ about it, and how to see what happened to recent transfers.
 | `lib/notify.rb` | Pushover client. Never raises. `lib/tweet.rb` now delegates here, so `tvrss.rb` and `wishlist-downloader.rb` notify too. |
 | `lib/transmission_rpc.rb` | Asks Transmission which torrents exist and whether they are complete. |
 | `lib/transfer_dashboard.rb`, `transfers-dashboard.rb` | Static HTML dashboard and terminal view. |
-| `../../home-server/Library/LaunchAgents/*.plist` | Regenerate the dashboard every 30 minutes. |
+| `lib/media_config.rb` | Where everything lives: library, Dropbox media folders, the NAS, the job queue. |
+| `lib/promoter.rb`, `lib/job_queue.rb`, `lib/transfers_worker.rb`, `transfers-worker.rb` | Promoting items to the NAS, triggered from the dashboard and run in the background (see below). |
+| `../web/cgi/transfers-api.rb` | The dashboard's one write endpoint, run by Apache: it only drops a request file into the queue. |
+| `../../home-server/Library/LaunchAgents/*.plist` | Regenerate the dashboard every 30 minutes; run the worker whenever the queue is non-empty. |
 
 ## One-time setup
 
@@ -70,6 +73,21 @@ about it, and how to see what happened to recent transfers.
 
    Anyone on your network can open the page, and it lists file names and
    paths, so do not expose it to the internet without authentication.
+
+6. **Promote-to-NAS buttons** (optional, see "Promoting to the NAS" below).
+   The dashboard posts to a CGI script that Apache runs as `_www`; it writes
+   one small file into a queue folder, and launchd runs the worker as you.
+
+       mkdir -p ~/logs/transfers-queue && chmod 1777 ~/logs/transfers-queue
+       sudo chown $USER /Library/WebServer/CGI-Executables   # so the deploy script can update the CGI
+       transmission-web-deploy.sh                              # copies ../web/cgi/transfers-api.rb there
+       sudo cp ~/dotfiles/common/conf/apache/transmission.conf /etc/apache2/other/ && sudo apachectl graceful
+       launchctl load ~/Library/LaunchAgents/com.brianpartridge.transfers-worker.plist
+
+   Check: `curl -si -X POST http://localhost/transfers/api` should answer
+   `403` with a JSON error (it refuses anything without the dashboard's
+   header); a `404` means the Apache config is not loaded, `500` means
+   `/usr/bin/ruby` could not write to the queue folder (the body says so).
 
 ## Ruby
 
@@ -145,6 +163,57 @@ Notifications you will get:
 - **Transfer failed** (high priority) when something went wrong: destination
   volume not mounted, copy failed, `unrar` missing or failing, a real file in
   the way of a movie symlink, or a crash.
+- **Promoted to NAS** / **Promote failed** (high priority) for jobs started
+  from the dashboard, below.
+
+## Promoting to the NAS
+
+The local library (`~/Media/tv`, `~/Media/movies`) is hardlinks into the
+downloads folder. Promoting an item copies it to the NAS at `/Volumes/Media`
+under the same relative path (`~/Media/tv/X.mkv` becomes
+`/Volumes/Media/tv/X.mkv`) and then removes the local library name. Because
+that name was a hardlink, the download keeps its copy and goes on seeding;
+nothing in the downloads folder is ever touched. A symlink is removed the
+same way. A plain file with no other link is a true move.
+
+On the dashboard, every transfer that was linked into the library and has
+not been promoted since has a **Promote to NAS** button. Clicking it queues
+a job; the page says so and reloads a few seconds later. The job runs in the
+background and appears under **Jobs** with its state and log; the log of a
+failed job is expanded. Each promotion is also a record in the transfer log
+(action `promote`), so the row and the web UI badge show the new state, and
+you get a notification either way.
+
+The same thing from a terminal:
+
+    transfers-worker.rb promote <torrent hash>              # everything that transfer filed
+    transfers-worker.rb promote ~/Media/tv/X.mkv            # one file
+    transfers-worker.rb promote ~/Media/tv/X.mkv --keep-link   # leave a symlink to the NAS behind
+    transfers-worker.rb enqueue promote <hash>              # queue it for launchd instead
+    transfers-worker.rb                                     # run whatever is queued
+
+Rules the worker follows: it refuses to run unless something is mounted
+exactly at `/Volumes/Media` (an empty mount point is not written into); it
+copies to a temporary name on the NAS and renames it only once the size
+matches, so a half-copied file is never mistaken for a finished one; an item
+already on the NAS with the same size is not copied again; the local name is
+removed only after the copy is verified. Season packs are promoted episode
+by episode, found by identity with the torrent's files, so a file of the same
+name that belongs to some other torrent is left alone. Override the NAS path
+with `$NAS_MEDIA`, and the queue and job folders with `$TRANSFERS_QUEUE` and
+`$TRANSFERS_JOBS` (defaults under `~/logs`).
+
+How the pieces fit: the dashboard button `POST`s to `/transfers/api` with the
+header `X-Requested-With: transfers`, which a browser never adds on its own,
+so another site cannot trigger it. Apache runs `transfers-api.rb` as `_www`
+with the system Ruby; the script validates the request (a known action and a
+40-hex hash) and writes it into `~/logs/transfers-queue`, which is why that
+folder is world-writable and sticky. launchd watches the folder
+(`QueueDirectories`) and starts `transfers-worker.rb` as you whenever it is
+non-empty. The worker moves each request into its own folder under
+`~/logs/transfers-jobs/<time>-promote-<name>/` (`request.json`, `status.json`,
+`log.txt`), does the work, appends a record, notifies, and regenerates the
+dashboard. Old job folders can be deleted at any time.
 
 ## Where to look when something is off
 
@@ -154,7 +223,11 @@ Notifications you will get:
 | Dashboard lists "complete but unhandled" (torrents that finished in the last 7 days with no record) | `~/logs/torrent-finished.out`. If there is no entry for that torrent, Transmission never ran the script (check the preference and that the `.sh` is executable). If there is an entry but it stops short, that output is the crash. |
 | No notifications at all | `~/logs/torrent-finished.out` will contain `[notify] ...` lines explaining why (missing config, HTTP error). |
 | Dashboard 404s or is not reachable | `sudo apachectl status` or `curl -I http://localhost/transfers/` on the Mac; make sure the launch daemon was loaded with `-w` so Apache survives a reboot. |
+| Free-space tile missing | It needs Transmission's remote access (the download folder comes from `session-get`); the figures come from `df` on that folder, or from Transmission's own number when `df` cannot run. |
 | Dashboard shows "Transmission unreachable" | Remote access is off, or `transmission.json` is wrong. Everything else still works. |
+| Promote button says "Could not queue" | The message is the CGI's: `403` means the header did not arrive (a proxy stripped it?), `404` means `transmission.conf` is not loaded in Apache, `500` means `~/logs/transfers-queue` is missing or not `chmod 1777`. |
+| Promote queued but nothing happens | The worker's launch agent is not loaded, or `~/logs/transfers-worker.out` has the crash. Run `transfers-worker.rb` by hand to see it. A request that was not valid JSON is parked in `~/logs/transfers-queue/rejected/`. |
+| Job failed with "NAS is not mounted" | Mount `/Volumes/Media` in the Finder, then click Promote again (or `transfers-worker.rb promote <hash>`). Nothing was changed locally. |
 
 Logs:
 
@@ -162,6 +235,7 @@ Logs:
 - `~/logs/torrent-finished.log`: the Ruby script's own log, 10 files of 10 MB
   (it used to be 10 files of 1 KB, which is why history kept vanishing).
 - `~/logs/transfers.jsonl`: one JSON object per run; the dashboard's source of truth.
+- `~/logs/transfers-worker.out` and `~/logs/transfers-jobs/*/log.txt`: the dashboard-triggered jobs.
 - `transfers.json` next to the dashboard page: the latest record per torrent, read by the
   Transmission web UI's transfers indicator (see `common/web/README.md`).
 
@@ -170,9 +244,10 @@ Logs:
 Each line of `transfers.jsonl`:
 
     ts, status (ok|other|error), outcome (tv|movie|ebook|comic|audiobook|music|no_media|multiple_media|unknown_media|error|no_torrent),
-    action (link|symlink|extract_link|extract_symlink|none), message, media_file, destination,
+    action (link|symlink|extract_link|extract_symlink|copy|promote|none), message, media_file, destination,
     torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro,
-    file_command (the --file-other command for a recognised-but-unfiled download)
+    file_command (the --file-other command for a recognised-but-unfiled download),
+    destinations and job (promotions: every file copied to the NAS, and the job folder's name)
 
 ## Tests
 

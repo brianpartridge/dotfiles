@@ -13,16 +13,21 @@ describe TransferDashboard do
       'totalSize' => 1_500_000_000, 'error' => error, 'errorString' => '' }
   end
 
-  def build(records:, torrents: [], rpc_error: nil)
+  def build(records:, torrents: [], rpc_error: nil, session: { 'download-dir' => '/dl', 'download-dir-free-space' => 50e9.to_i }, disk: nil,
+            queue: instance_double(JobQueue, jobs: []))
     log = instance_double(TransferLog, records: records)
     rpc = instance_double(TransmissionRPC)
     if rpc_error
       allow(rpc).to receive(:torrents).and_raise(TransmissionRPC::Error, rpc_error)
     else
       allow(rpc).to receive(:torrents).and_return(torrents)
+      allow(rpc).to receive(:session).and_return(session)
     end
-    TransferDashboard::Report.new(log: log, rpc: rpc, now: now)
+    disk_space = lambda { |dir| disk && dir == '/dl' ? disk.merge('directory' => dir) : nil }
+    TransferDashboard::Report.new(log: log, rpc: rpc, now: now, disk_space: disk_space, queue: queue)
   end
+
+  let(:roomy_disk) { { 'mount' => '/', 'total' => 1000e9.to_i, 'used' => 400e9.to_i, 'free' => 600e9.to_i } }
 
   let(:records) do
     [
@@ -75,6 +80,28 @@ describe TransferDashboard do
       expect(r.unhandled(window: 365 * 86_400).count).to eq(4)
     end
 
+    it 'reports free space on the download volume from df' do
+      r = build(records: [], disk: roomy_disk)
+      expect(r.disk).to include('directory' => '/dl', 'mount' => '/', 'free' => 600e9.to_i, 'total' => 1000e9.to_i)
+      expect(r.disk_level).to eq('ok')
+    end
+
+    it 'falls back to the free space Transmission reports when df cannot answer' do
+      r = build(records: [])
+      expect(r.disk).to eq('directory' => '/dl', 'mount' => nil, 'total' => nil, 'used' => nil, 'free' => 50e9.to_i)
+      expect(r.disk_level).to eq('ok')
+    end
+
+    it 'has no disk figure without Transmission' do
+      expect(build(records: [], rpc_error: 'nope').disk).to be_nil
+    end
+
+    it 'grades low and critical space' do
+      expect(build(records: [], disk: roomy_disk.merge('free' => 120e9.to_i, 'used' => 880e9.to_i)).disk_level).to eq('low')
+      expect(build(records: [], disk: roomy_disk.merge('free' => 30e9.to_i, 'used' => 970e9.to_i)).disk_level).to eq('critical')
+      expect(build(records: [], session: { 'download-dir' => '/dl', 'download-dir-free-space' => 8e9.to_i }).disk_level).to eq('critical')
+    end
+
     it 'survives an unreachable Transmission' do
       r = build(records: records, rpc_error: 'Errno::ECONNREFUSED')
       expect(r.rpc_error).to match(/ECONNREFUSED/)
@@ -90,6 +117,7 @@ describe TransferDashboard do
         expect { TransferDashboard.generate(report: r, output: out) }.to output(/Wrote/).to_stdout
         html = File.read(out)
         expect(html).to include('Show.S01E01', 'Never.Handled', 'last 7 days, never handled', 'unhandled, 7 days', 'In progress', '50%')
+        expect(html).to include('Free on downloads volume', '50.0 GB', '/dl (as reported by Transmission)')
         expect(html).to include('RuntimeError: missing', 'env ... ruby x')
         expect(html).not_to include('<script src') # only the inline copy-button script
         expect(File.exist?("#{out}.tmp")).to be false
@@ -108,6 +136,69 @@ describe TransferDashboard do
         expect(json['by_hash']['ccc']['status']).to eq('other') # legacy warning normalised
         expect(json['by_name']['Film.2001']).to include('status' => 'error', 'message' => 'RuntimeError: Destination directory is missing')
         expect(File.exist?(File.join(dir, 'transfers.json.tmp'))).to be false
+      end
+    end
+
+    it 'offers a promote button only on the newest library record of each torrent' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        recs = [
+          { 'ts' => now.iso8601, 'status' => 'ok', 'outcome' => 'tv', 'action' => 'promote', 'message' => 'Promoted',
+            'destination' => '/nas/tv/a.mkv', 'torrent' => { 'name' => 'Already.Promoted', 'hash' => 'a' * 40 } },
+          { 'ts' => (now - 60).iso8601, 'status' => 'ok', 'outcome' => 'tv', 'action' => 'link', 'message' => 'Linked',
+            'destination' => '/m/tv/a.mkv', 'torrent' => { 'name' => 'Already.Promoted', 'hash' => 'a' * 40 } },
+          { 'ts' => (now - 120).iso8601, 'status' => 'ok', 'outcome' => 'movie', 'action' => 'extract_link', 'message' => 'Linked',
+            'destination' => '/m/movies/b.mkv', 'torrent' => { 'name' => 'Film <1>', 'hash' => 'B' * 40 } },
+          { 'ts' => (now - 180).iso8601, 'status' => 'other', 'outcome' => 'ebook', 'action' => 'none', 'message' => 'not filed',
+            'torrent' => { 'name' => 'Book', 'hash' => 'c' * 40 } },
+          { 'ts' => (now - 240).iso8601, 'status' => 'ok', 'outcome' => 'tv', 'action' => 'link', 'message' => 'no hash',
+            'destination' => '/m/tv/d.mkv', 'torrent' => { 'name' => 'Hashless' } }
+        ]
+        r = build(records: recs)
+        expect(r.promotable?(recs[0])).to be false
+        expect(r.promotable?(recs[1])).to be false # superseded by the promotion
+        expect(r.promotable?(recs[2])).to be true
+        expect(r.promotable?(recs[3])).to be false
+        expect(r.promotable?(recs[4])).to be false
+        TransferDashboard.generate(report: r, output: out, quiet: true)
+        html = File.read(out, encoding: 'UTF-8')
+        expect(html.scan('class="promote"').count).to eq(1)
+        expect(html).to include(%(data-hash="#{'B' * 40}" data-name="Film &lt;1&gt;">Promote to NAS</button>))
+        expect(html).to include('promoted to /nas/tv', "'X-Requested-With', 'transfers'", "action: 'promote'")
+      end
+    end
+
+    it 'lists jobs with their state and log, opening the log of a failed one' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        done = instance_double(JobQueue::Job, id: '20260925-115900-promote-aaaa', request: { 'action' => 'promote', 'hash' => 'a' * 40, 'via' => 'dashboard' },
+                                              status: { 'state' => 'done', 'action' => 'promote', 'subject' => 'a' * 40, 'message' => 'Promoted a.mkv to /nas/tv',
+                                                        'started_at' => (now - 120).iso8601, 'finished_at' => (now - 60).iso8601 },
+                                              log_tail: "11:59:00 Started\n12:00:00 Done\n")
+        failed = instance_double(JobQueue::Job, id: '20260925-113000-promote-bbbb', request: { 'action' => 'promote', 'hash' => 'b' * 40 },
+                                                status: { 'state' => 'failed', 'action' => 'promote', 'subject' => 'b' * 40, 'message' => 'Promoter::NotMounted: NAS is not mounted',
+                                                          'started_at' => (now - 1800).iso8601, 'finished_at' => (now - 1799).iso8601 },
+                                                log_tail: "11:30:00 FAILED: Promoter::NotMounted: NAS is not mounted <x>\n")
+        queued = instance_double(JobQueue::Job, id: '20260925-120000-promote-cccc', request: { 'action' => 'promote', 'hash' => 'c' * 40 }, status: nil, log_tail: '')
+        r = build(records: [], queue: instance_double(JobQueue, jobs: [queued, done, failed]))
+        expect(r.jobs.map { |j| j['state'] }).to eq(%w[queued done failed])
+        expect(r.running_jobs.count).to eq(1)
+        expect(r.failed_jobs.count).to eq(1)
+        TransferDashboard.generate(report: r, output: out, quiet: true)
+        html = File.read(out, encoding: 'UTF-8')
+        expect(html).to include('<h2>Jobs</h2>', 'Promoted a.mkv to /nas/tv', 'NAS is not mounted &lt;x&gt;', 'via dashboard')
+        expect(html.scan('<details open>').count).to eq(1)
+        expect(html).to include('class="badge running" aria-label="queued"', 'class="badge done"', 'class="badge failed"')
+        expect(TransferDashboard.text(r)).to include('JOBS:', 'failed  20260925-113000-promote-bbbb  Promoter::NotMounted')
+      end
+    end
+
+    it 'shows no jobs section when the queue has never been used' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        r = build(records: [], queue: JobQueue.new(queue_dir: File.join(dir, 'q'), jobs_dir: File.join(dir, 'j')))
+        TransferDashboard.generate(report: r, output: out, quiet: true)
+        expect(File.read(out, encoding: 'UTF-8')).not_to include('<h2>Jobs</h2>')
       end
     end
 
@@ -136,6 +227,15 @@ describe TransferDashboard do
       end
     end
 
+    it 'shows the used meter and mount when df answered' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        TransferDashboard.generate(report: build(records: [], disk: roomy_disk), output: out, quiet: true)
+        html = File.read(out, encoding: 'UTF-8')
+        expect(html).to include('600.0 GB', '400.0 GB of 1.00 TB used · /', 'aria-valuenow="40"', 'class="tile ok"')
+      end
+    end
+
     it 'shows a notice when Transmission is unreachable' do
       with_tmpdir do |dir|
         out = File.join(dir, 'index.html')
@@ -150,6 +250,11 @@ describe TransferDashboard do
       text = TransferDashboard.text(build(records: records, torrents: [torrent('Never.Handled', 'ddd')]))
       expect(text).to include('1 filed, 0 other, 1 failed', 'UNHANDLED', 'Never.Handled', 'Show.S01E01', '10m ago')
       expect(text).to include('Destination directory is missing')
+    end
+
+    it 'prints free space' do
+      expect(TransferDashboard.text(build(records: [], disk: roomy_disk))).to include('Free space: 600.0 GB of 1.00 TB on /')
+      expect(TransferDashboard.text(build(records: [], disk: roomy_disk.merge('free' => 30e9.to_i)))).to include('(LOW)')
     end
 
     it 'prints the filing command for unfiled downloads' do
