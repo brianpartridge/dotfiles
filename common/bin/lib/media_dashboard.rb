@@ -156,6 +156,15 @@ module MediaDashboard
       attrs.map { |k, v| %(#{k}="#{h(v)}") }.join(' ')
     end
 
+    # Where the bytes of a library file also live, for the unlink dialog;
+    # empty when the library holds the only copy.
+    def elsewhere(item)
+      return 'the NAS' if item.on_nas?
+      return 'the download' if item.in_transmission? && item.on_disk
+
+      ''
+    end
+
     def nas_label(item)
       return nil unless item.on_nas?
 
@@ -291,10 +300,10 @@ module MediaDashboard
                   <%- if g.items.count > 1 || i.name != File.basename(t ? t['name'] : i.name) -%><div><%= h(i.name) %> · <%= h(size_label(i.size)) %><%- if i.extracted -%> · extracted from an archive<%- end -%></div><%- end -%>
                   <div class="msg"><%= h(library_label(i)) %><%- if nas_label(i) -%> · <%= h(nas_label(i)) %><%- end -%><%- if i.in_transmission? && i.in_library? && i.frees_if_removed >= SHOW_FREES_FROM -%> · <span class="frees">removing the download frees <%= h(size_label(i.frees_if_removed)) %></span><%- end -%></div>
                   <%- i.warnings.each do |w| -%><div class="warn">! <%= h(w) %></div><%- end -%>
-                  <%- if i.in_library? && i.on_disk -%>
+                  <%- if i.in_library? -%>
                   <div class="actions">
-                    <%- unless i.on_nas? -%><button type="button" class="act" <%= action_attrs('promote', 'path', i.library_path, i.name, 'data-size' => i.size.to_i) %>>Promote to NAS</button><%- end -%>
-                    <%- if i.on_nas? || (i.in_transmission? && i.link == 'hardlink') -%><button type="button" class="act danger" <%= action_attrs('unlink_library', 'path', i.library_path, i.name, 'data-elsewhere' => i.on_nas? ? 'the NAS' : 'the download') %>>Remove from library</button><%- end -%>
+                    <%- if i.on_disk && !i.on_nas? -%><button type="button" class="act" <%= action_attrs('promote', 'path', i.library_path, i.name, 'data-size' => i.size.to_i) %>>Promote to NAS</button><%- end -%>
+                    <button type="button" class="act danger" <%= action_attrs('unlink_library', 'path', i.library_path, i.name, 'data-elsewhere' => elsewhere(i), 'data-size' => i.size.to_i) %>><%= elsewhere(i).empty? && i.on_disk ? 'Delete from library' : 'Remove from library' %></button>
                     <span class="note"></span>
                   </div>
                   <%- end -%>
@@ -371,7 +380,10 @@ module MediaDashboard
             if (d.fragile === 'yes') { q += '\n\nA library symlink into the download will be replaced with a real copy first.'; }
             return q + '\n\nFiles are deleted, not moved to the Trash.';
           }
-          if (d.action === 'unlink_library') { return 'Remove "' + name + '" from the local library? The bytes stay on ' + d.elsewhere + '.'; }
+          if (d.action === 'unlink_library') {
+            if (d.elsewhere) { return 'Remove "' + name + '" from the local library? The bytes stay on ' + d.elsewhere + '.'; }
+            return 'Delete "' + name + '" (' + size(d.size) + ') from the local library?\n\nThis is the only copy: it is not in Transmission and not on the NAS. It is deleted, not moved to the Trash.';
+          }
           return 'Copy "' + name + '" (' + size(d.size) + ') to the NAS and remove it from the local library?';
         }
         document.addEventListener('click', function (event) {

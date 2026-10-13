@@ -220,10 +220,11 @@ shows a one-line summary of the latest ones.
   removed with the rest, and the emptied download folder goes too. Other
   files someone put in that folder are left alone. The dialog shows the
   space that will be freed, which for a hardlinked item is only the extras.
-- **Remove from library**, on a library file whose bytes exist somewhere
-  else: on the NAS, or still in Transmission as a hardlink. A library-only
-  file never gets this button, since removing it would be deleting the
-  only copy.
+- **Remove from library**, on every library file. When the bytes also
+  live on the NAS or in the download, that is all it does. When the
+  library holds the only copy (not in Transmission, not on the NAS) the
+  button reads **Delete from library** and the dialog says so, with the
+  size: that one deletes the file for good.
 - **Promote to NAS**, on a library file not yet on the NAS (see below).
 
 A torrent that is still downloading cannot be removed from here; use
