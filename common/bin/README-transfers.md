@@ -16,6 +16,7 @@ about it, and how to see what happened to recent transfers.
 | `lib/transmission_rpc.rb` | Asks Transmission which torrents exist and whether they are complete. |
 | `lib/transfer_dashboard.rb`, `transfers-dashboard.rb` | Static HTML dashboard and terminal view. Also regenerates the media page. |
 | `lib/media_inventory.rb`, `lib/media_dashboard.rb`, `media-dashboard.rb` | The media page: every TV episode and movie, where it is and what it costs (see "The media page"). |
+| `lib/media_remover.rb` | The media page's actions: remove a torrent with its data (the library keeps its bytes), remove library entries. |
 | `lib/media_config.rb` | Where everything lives: library, Dropbox media folders, the NAS, the job queue. |
 | `lib/promoter.rb`, `lib/job_queue.rb`, `lib/transfers_worker.rb`, `transfers-worker.rb` | Promoting items to the NAS, triggered from the dashboard and run in the background (see below). |
 | `../web/cgi/transfers-api.rb` | The dashboard's one write endpoint, run by Apache: it only drops a request file into the queue. |
@@ -201,8 +202,38 @@ minutes and after every job); `media-dashboard.rb` regenerates it alone,
 `--text` prints it, `--json` dumps what the page is built from
 (`media.json` next to the page).
 
-There are no buttons on this page yet; removing torrents and library files
-from it is the next step.
+### Actions on the media page
+
+Every button queues a job the same way the Promote button does (the CGI,
+the queue folder, `transfers-worker.rb` under launchd), asks first with a
+dialog that says exactly what will happen, and the page reloads once the
+job has run. Jobs and their logs are on the transfers page; the media page
+shows a one-line summary of the latest ones.
+
+- **Remove torrent and data**, on every finished torrent. Transmission
+  forgets the torrent and deletes its files, outright, not to the Trash.
+  With **keep the library files** ticked (the default) every library entry
+  keeps its bytes: a hardlink already does, a legacy symlink into the
+  downloads is replaced by a hardlink (a copy across volumes) first. Untick
+  it to delete the local library entries as well. Videos that were
+  extracted from an archive, which Transmission does not know about, are
+  removed with the rest, and the emptied download folder goes too. Other
+  files someone put in that folder are left alone. The dialog shows the
+  space that will be freed, which for a hardlinked item is only the extras.
+- **Remove from library**, on a library file whose bytes exist somewhere
+  else: on the NAS, or still in Transmission as a hardlink. A library-only
+  file never gets this button, since removing it would be deleting the
+  only copy.
+- **Promote to NAS**, on a library file not yet on the NAS (see below).
+
+A torrent that is still downloading cannot be removed from here; use
+Transmission. The NAS is never written to or deleted from by any of these.
+
+The same from a terminal:
+
+    transfers-worker.rb remove_torrent <hash>                     # keeps the library files
+    transfers-worker.rb remove_torrent <hash> --remove-library    # deletes them too
+    transfers-worker.rb unlink_library <hash>                     # or a path under ~/Media
 
 ## Promoting to the NAS
 
@@ -268,6 +299,7 @@ dashboard. Old job folders can be deleted at any time.
 | Promote button says "Could not queue" | The message is the CGI's: `403` means the header did not arrive (a proxy stripped it?), `404` means `transmission.conf` is not loaded in Apache, `500` means `~/logs/transfers-queue` is missing or not `chmod 1777`. |
 | Promote queued but nothing happens | The worker's launch agent is not loaded, or `~/logs/transfers-worker.out` has the crash. Run `transfers-worker.rb` by hand to see it. A request that was not valid JSON is parked in `~/logs/transfers-queue/rejected/`. |
 | Job failed with "NAS is not mounted" | Mount `/Volumes/Media` in the Finder, then click Promote again (or `transfers-worker.rb promote <hash>`). Nothing was changed locally. |
+| Remove job says "Transmission has not deleted N file(s) yet" | Transmission acknowledged the removal but the files were still there after 15 seconds; check the download folder. The library entries were secured before the removal, so nothing is lost either way. |
 
 Logs:
 
@@ -284,10 +316,11 @@ Logs:
 Each line of `transfers.jsonl`:
 
     ts, status (ok|other|error), outcome (tv|movie|ebook|comic|audiobook|music|no_media|multiple_media|unknown_media|error|no_torrent),
-    action (link|symlink|extract_link|extract_symlink|copy|promote|none), message, media_file, destination,
+    action (link|symlink|extract_link|extract_symlink|copy|promote|remove|unlink|none), message, media_file, destination,
     torrent {name, directory, hash, id}, error {class, message, backtrace}, duration_s, notified, repro,
     file_command (the --file-other command for a recognised-but-unfiled download),
-    destinations and job (promotions: every file copied to the NAS, and the job folder's name)
+    destinations and job (promotions: every file copied to the NAS, and the job folder's name),
+    freed and kept (removals: bytes freed, library files that kept their bytes)
 
 ## Tests
 

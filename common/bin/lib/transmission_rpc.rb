@@ -53,6 +53,12 @@ class TransmissionRPC
     call('torrent-get', 'fields' => fields).fetch('torrents', [])
   end
 
+  # Removes torrents by id or hash. With delete_data, Transmission deletes
+  # the files it knows about too (outright, not to the Trash).
+  def remove(ids, delete_data: false)
+    call('torrent-remove', 'ids' => Array(ids), 'delete-local-data' => delete_data)
+  end
+
   # Session settings, including 'download-dir' and 'download-dir-free-space'.
   def session
     call('session-get')

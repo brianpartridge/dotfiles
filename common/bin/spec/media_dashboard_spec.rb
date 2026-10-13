@@ -61,6 +61,29 @@ describe MediaDashboard do
       end
     end
 
+    it 'offers the right actions per row, with the facts the confirmation needs' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        jobs = [{ 'id' => 'j1', 'state' => 'failed', 'action' => 'remove_torrent', 'subject' => 'b' * 40, 'message' => 'RuntimeError: still downloading', 'request' => {} },
+                { 'id' => 'j2', 'state' => 'running', 'action' => 'promote', 'request' => { 'path' => '/m/tv/x.mkv' } }]
+        MediaDashboard.generate(inventory: inventory(dir), output: out, quiet: true, jobs: jobs)
+        html = File.read(out, encoding: 'UTF-8')
+        # the seeding episode: remove with a keep box, promote and unlink for its library file
+        expect(html).to include(%(data-action="remove_torrent" data-hash="#{'a' * 40}" data-name="Show.S01E01" data-frees="0" data-library="1" data-fragile="no"))
+        expect(html).to include('<input type="checkbox" class="keep" checked> keep the 1 library file</label>')
+        expect(html).to include(%(data-action="promote" data-path="#{File.join(dir, 'Media', 'tv', 'Show.S01E01.mkv')}" data-name="Show.S01E01.mkv" data-size="2000000"))
+        expect(html).to include(%(data-action="unlink_library" data-path="#{File.join(dir, 'Media', 'tv', 'Show.S01E01.mkv')}" data-name="Show.S01E01.mkv" data-elsewhere="the download"))
+        # the unfiled movie: remove only, no keep box
+        expect(html).to include(%(data-action="remove_torrent" data-hash="#{'b' * 40}" data-name="Film.2010" data-frees="3000000" data-library="0"))
+        expect(html.scan('class="keep"').count).to eq(1)
+        # the library-only file: promote, but no unlink (the bytes exist nowhere else)
+        expect(html.scan('data-action="unlink_library"').count).to eq(1)
+        expect(html.scan('data-action="promote"').count).to eq(2)
+        expect(html).to include("'X-Requested-With', 'transfers'", 'Files are deleted, not moved to the Trash.')
+        expect(html).to include('<b>Jobs:</b> 1 running, 1 failed in the last 2', 'RuntimeError: still downloading', 'promote x.mkv')
+      end
+    end
+
     it 'shows a notice and only the library when Transmission is unreachable' do
       with_tmpdir do |dir|
         out = File.join(dir, 'index.html')

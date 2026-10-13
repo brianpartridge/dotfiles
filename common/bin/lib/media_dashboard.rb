@@ -5,6 +5,8 @@ require 'erb'
 require 'fileutils'
 require 'json'
 require 'time'
+require_relative 'job_queue'
+require_relative 'media_config'
 require_relative 'media_inventory'
 require_relative 'transfer_dashboard'
 
@@ -35,11 +37,12 @@ module MediaDashboard
     DEFAULT_OUTPUT
   end
 
-  def generate(output: nil, quiet: false, inventory: nil)
+  def generate(output: nil, quiet: false, inventory: nil, jobs: nil)
     inventory ||= MediaInventory::Inventory.new
+    jobs ||= recent_jobs
     path = output_path(output)
     FileUtils.mkdir_p(File.dirname(path))
-    TransferDashboard.write_atomically(path, Html.new(inventory).render)
+    TransferDashboard.write_atomically(path, Html.new(inventory, jobs: jobs).render)
     json_path = File.join(File.dirname(path), 'media.json')
     TransferDashboard.write_atomically(json_path, JSON.pretty_generate(inventory.to_h))
     puts "Wrote #{path} and #{File.basename(json_path)}" unless quiet
@@ -49,6 +52,16 @@ module MediaDashboard
   def text(inventory = nil)
     inventory ||= MediaInventory::Inventory.new
     Text.new(inventory).render
+  end
+
+  # The latest dashboard-triggered jobs, as the transfers page shows them.
+  def recent_jobs(queue = JobQueue.new(queue_dir: MediaConfig::QUEUE_DIR, jobs_dir: MediaConfig::JOBS_DIR), limit: 8)
+    queue.jobs(limit: limit).map do |job|
+      status = job.status || { 'state' => 'queued' }
+      status.merge('id' => job.id, 'request' => job.request)
+    end
+  rescue StandardError
+    []
   end
 
   def state_label(state)
@@ -103,9 +116,10 @@ module MediaDashboard
   # Static HTML. The filters and sorting are a little inline script over
   # data attributes, so the page still lists everything without it.
   class Html
-    def initialize(inventory)
+    def initialize(inventory, jobs: [])
       @inv = inventory
       @totals = inventory.totals
+      @jobs = jobs
     end
 
     def render
@@ -133,6 +147,13 @@ module MediaDashboard
 
       dir = File.dirname(item.library_path).sub(/\A#{Regexp.escape(@inv.media_root)}\/?/, '~/Media/')
       item.link ? "#{dir} (#{MediaInventory::LINK_LABELS.fetch(item.link, item.link)})" : dir
+    end
+
+    # Attributes for an action button; the script builds the request and the
+    # confirmation from them.
+    def action_attrs(action, subject_key, subject, name, extra = {})
+      attrs = { 'data-action' => action, "data-#{subject_key}" => subject, 'data-name' => name }.merge(extra)
+      attrs.map { |k, v| %(#{k}="#{h(v)}") }.join(' ')
     end
 
     def nas_label(item)
@@ -167,6 +188,17 @@ module MediaDashboard
         ul.files li.hidden, li.group.hidden { display: none; }
         .frees { color: var(--warning); }
         .warn { color: var(--critical); font-size: 12px; }
+        .actions { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; }
+        .actions button { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--accent); cursor: pointer; }
+        .actions button.danger { color: var(--critical); }
+        .actions button:hover { border-color: currentColor; }
+        .actions button:disabled { color: var(--text-3); cursor: default; }
+        .actions label { color: var(--text-2); }
+        .actions .note { color: var(--text-2); }
+        .actions .note.error { color: var(--critical); }
+        .jobs { font-size: 13px; }
+        .jobs .badge { width: 18px; height: 18px; font-size: 11px; margin-right: 6px; vertical-align: middle; }
+        .jobs div + div { margin-top: 4px; }
         .kind { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-2); vertical-align: 1px; }
       </style>
       </head>
@@ -189,6 +221,17 @@ module MediaDashboard
         <%- end -%>
         <%- unless @inv.library_errors.empty? -%>
         <div class="notice"><b>Could not read part of the library.</b><%- @inv.library_errors.each do |e| -%><div class="msg"><%= h(e) %></div><%- end -%></div>
+        <%- end -%>
+
+        <%- unless @jobs.empty? -%>
+        <%- busy = @jobs.count { |j| %w[running queued].include?(j['state']) }; failed = @jobs.count { |j| j['state'] == 'failed' } -%>
+        <div class="notice jobs <%= failed.positive? ? 'critical' : '' %>">
+          <b>Jobs:</b> <%= busy %> running, <%= failed %> failed in the last <%= @jobs.count %> · logs on the <a href="../">transfers page</a>
+          <%- @jobs.first(5).each do |j| -%>
+          <%- klass, glyph = { 'done' => ['done', '✓'], 'failed' => ['failed', '✕'] }.fetch(j['state'], ['running', '…']) -%>
+          <div><span class="badge <%= klass %>"><%= glyph %></span><%= h(j['action'] || j['request']['action']) %> <%= h(File.basename((j['subject'] || j['request']['hash'] || j['request']['path']).to_s)) %><%- if j['message'] -%> · <%= h(j['message']) %><%- end -%></div>
+          <%- end -%>
+        </div>
         <%- end -%>
 
         <div class="filters" id="filters">
@@ -234,12 +277,27 @@ module MediaDashboard
               <div class="name"><%= h(g.name) %> <span class="kind"><%= h(MediaDashboard.kind_label(g.kind)) %></span></div>
               <div class="meta"><b><%= h(MediaDashboard.state_label(g.state)) %></b><%- if g.size.positive? -%> · <%= h(size_label(g.size)) %><%- end -%><%- if t -%> · <%= h(t['status']) %><%- if t['complete'] -%>, ratio <%= h(t['ratio']) %> · finished <%= when_html(g.when) %><%- else -%>, <%= t['percent'] %>% · added <%= when_html(g.when) %><%- end -%><%- else -%> · <%= when_html(g.when) %><%- end -%><%- if g.frees_if_removed >= SHOW_FREES_FROM -%> · <span class="frees">removing frees <%= h(size_label(g.frees_if_removed)) %></span><%- end -%></div>
               <%- if t && t['error'] -%><div class="warn">Transmission: <%= h(t['error']) %></div><%- end -%>
+              <%- if t && t['complete'] -%>
+              <%- in_library = g.items.count(&:in_library?) -%>
+              <div class="actions">
+                <button type="button" class="act danger" <%= action_attrs('remove_torrent', 'hash', t['hash'], g.name, 'data-frees' => g.frees_if_removed, 'data-library' => in_library, 'data-fragile' => g.fragile? ? 'yes' : 'no') %>>Remove torrent and data</button>
+                <%- if in_library.positive? -%><label><input type="checkbox" class="keep" checked> keep the <%= in_library %> library file<%= in_library == 1 ? '' : 's' %></label><%- end -%>
+                <span class="note"></span>
+              </div>
+              <%- end -%>
               <ul class="files">
                 <%- g.items.each do |i| -%>
                 <li class="file" data-name="<%= h(i.name.downcase) %>" data-state="<%= h(i.state) %>" data-kind="<%= h(i.kind) %>" data-nas="<%= i.on_nas? ? 'yes' : 'no' %>" data-attention="<%= i.warnings.empty? ? 'no' : 'yes' %>">
                   <%- if g.items.count > 1 || i.name != File.basename(t ? t['name'] : i.name) -%><div><%= h(i.name) %> · <%= h(size_label(i.size)) %><%- if i.extracted -%> · extracted from an archive<%- end -%></div><%- end -%>
                   <div class="msg"><%= h(library_label(i)) %><%- if nas_label(i) -%> · <%= h(nas_label(i)) %><%- end -%><%- if i.in_transmission? && i.in_library? && i.frees_if_removed >= SHOW_FREES_FROM -%> · <span class="frees">removing the download frees <%= h(size_label(i.frees_if_removed)) %></span><%- end -%></div>
                   <%- i.warnings.each do |w| -%><div class="warn">! <%= h(w) %></div><%- end -%>
+                  <%- if i.in_library? && i.on_disk -%>
+                  <div class="actions">
+                    <%- unless i.on_nas? -%><button type="button" class="act" <%= action_attrs('promote', 'path', i.library_path, i.name, 'data-size' => i.size.to_i) %>>Promote to NAS</button><%- end -%>
+                    <%- if i.on_nas? || (i.in_transmission? && i.link == 'hardlink') -%><button type="button" class="act danger" <%= action_attrs('unlink_library', 'path', i.library_path, i.name, 'data-elsewhere' => i.on_nas? ? 'the NAS' : 'the download') %>>Remove from library</button><%- end -%>
+                    <span class="note"></span>
+                  </div>
+                  <%- end -%>
                 </li>
                 <%- end -%>
               </ul>
@@ -291,6 +349,64 @@ module MediaDashboard
         }
         controls.forEach(function (c) { c.addEventListener('input', apply); c.addEventListener('change', apply); });
         apply();
+      })();
+
+      // Action buttons queue a job for transfers-worker.rb through the CGI at
+      // /transfers/api, like the transfers page. Each asks first, saying what
+      // will happen; the worker regenerates this page when it is done.
+      (function () {
+        function size(bytes) {
+          bytes = Number(bytes) || 0;
+          if (bytes >= 1e12) { return (bytes / 1e12).toFixed(2) + ' TB'; }
+          if (bytes >= 1e9) { return (bytes / 1e9).toFixed(1) + ' GB'; }
+          if (bytes >= 1e6) { return Math.round(bytes / 1e6) + ' MB'; }
+          return Math.round(bytes / 1e3) + ' KB';
+        }
+        function question(button, keep) {
+          var d = button.dataset, name = d.name;
+          if (d.action === 'remove_torrent') {
+            var q = 'Remove "' + name + '" from Transmission and delete its download data (' + size(d.frees) + ' freed' +
+                    (keep && d.library > 0 ? ', the ' + d.library + ' library file' + (d.library > 1 ? 's' : '') + ' stay' : '') + ')?';
+            if (!keep && d.library > 0) { q += '\n\nThe ' + d.library + ' library file' + (d.library > 1 ? 's' : '') + ' will be deleted too.'; }
+            if (d.fragile === 'yes') { q += '\n\nA library symlink into the download will be replaced with a real copy first.'; }
+            return q + '\n\nFiles are deleted, not moved to the Trash.';
+          }
+          if (d.action === 'unlink_library') { return 'Remove "' + name + '" from the local library? The bytes stay on ' + d.elsewhere + '.'; }
+          return 'Copy "' + name + '" (' + size(d.size) + ') to the NAS and remove it from the local library?';
+        }
+        document.addEventListener('click', function (event) {
+          var button = event.target.closest ? event.target.closest('button.act') : null;
+          if (!button) { return; }
+          var keepBox = button.parentNode.querySelector('input.keep');
+          var keep = keepBox ? keepBox.checked : true;
+          if (!window.confirm(question(button, keep))) { return; }
+          var note = button.parentNode.querySelector('.note');
+          var body = { action: button.dataset.action };
+          if (button.dataset.hash) { body.hash = button.dataset.hash; } else { body.path = button.dataset.path; }
+          if (button.dataset.action === 'remove_torrent') { body.keep_library = keep; }
+          button.disabled = true;
+          note.className = 'note';
+          note.textContent = 'Queueing\u2026';
+          var api = document.location.pathname.replace(/media\/?[^\/]*$/, '') + 'api';
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', api, true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('X-Requested-With', 'transfers');
+          xhr.onload = function () {
+            if (xhr.status === 202) {
+              note.textContent = 'Queued. This page refreshes when the job finishes\u2026';
+              setTimeout(function () { document.location.reload(); }, 10000);
+              return;
+            }
+            var message = 'HTTP ' + xhr.status;
+            try { message = JSON.parse(xhr.responseText).error || message; } catch (e) { /* not JSON */ }
+            note.className = 'note error';
+            note.textContent = 'Could not queue: ' + message;
+            button.disabled = false;
+          };
+          xhr.onerror = function () { note.className = 'note error'; note.textContent = 'Could not reach ' + api; button.disabled = false; };
+          xhr.send(JSON.stringify(body));
+        });
       })();
       </script>
       </body>
