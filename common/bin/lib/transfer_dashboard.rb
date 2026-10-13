@@ -9,6 +9,8 @@ require 'set'
 require 'shellwords'
 require 'socket'
 require 'time'
+require_relative 'job_queue'
+require_relative 'media_config'
 require_relative 'notify'
 require_relative 'transfer_log'
 require_relative 'transmission_rpc'
@@ -28,6 +30,7 @@ module TransferDashboard
   DAY = 24 * 60 * 60
   WEEK = 7 * DAY
   UNHANDLED_WINDOW = WEEK # how far back to look for complete-but-unhandled torrents
+  JOBS_LIMIT = 20 # dashboard-triggered jobs to show
 
   STATUS_LABELS = {
     'ok' => 'Filed',
@@ -49,7 +52,8 @@ module TransferDashboard
     'multiple_media' => 'Could not pick a file',
     'unknown_media' => 'Not TV or a movie',
     'error' => 'Error',
-    'no_torrent' => 'No torrent info'
+    'no_torrent' => 'No torrent info',
+    'file' => 'Library file'
   }.freeze
 
   # Free space on the volume holding a directory, from df, which is on every
@@ -76,11 +80,15 @@ module TransferDashboard
 
   # Everything the dashboard shows, gathered once.
   class Report
-    attr_reader :records, :torrents, :rpc_error, :generated_at, :disk
+    attr_reader :records, :torrents, :rpc_error, :generated_at, :disk, :jobs
+
+    PROMOTABLE_ACTIONS = %w[link symlink extract_link extract_symlink].freeze
 
     def initialize(log: TransferLog.new, rpc: TransmissionRPC.from_config, limit: RECENT_LIMIT, now: Time.now,
-                   disk_space: DiskSpace.method(:for))
+                   disk_space: DiskSpace.method(:for),
+                   queue: JobQueue.new(queue_dir: MediaConfig::QUEUE_DIR, jobs_dir: MediaConfig::JOBS_DIR))
       @generated_at = now
+      @jobs = jobs_from(queue)
       @records = log.records(limit: limit).map do |r|
         r.merge('status' => LEGACY_STATUSES.fetch(r['status'], r['status']))
       end
@@ -107,6 +115,43 @@ module TransferDashboard
       return nil if directory.empty? || free <= 0
 
       { 'directory' => directory, 'mount' => nil, 'total' => nil, 'used' => nil, 'free' => free }
+    end
+
+    # Dashboard-triggered jobs (promotions), newest first, as plain hashes:
+    # the job's status.json plus its id and the tail of its log.
+    def jobs_from(queue)
+      queue.jobs(limit: JOBS_LIMIT).map do |job|
+        status = job.status || { 'state' => 'queued' }
+        status.merge('id' => job.id, 'request' => job.request, 'log' => job.log_tail)
+      end
+    rescue StandardError
+      []
+    end
+
+    def running_jobs
+      @jobs.select { |j| %w[running queued].include?(j['state']) }
+    end
+
+    def failed_jobs
+      @jobs.select { |j| j['state'] == 'failed' }
+    end
+
+    # A record whose files can be promoted to the NAS: it was filed into the
+    # local library and nothing newer has happened to that torrent since.
+    def promotable?(record)
+      return false unless record['status'] == 'ok' && PROMOTABLE_ACTIONS.include?(record['action'])
+
+      hash = (record['torrent'] || {})['hash'].to_s.downcase
+      return false if hash.empty?
+
+      newest_by_hash[hash]['ts'] == record['ts']
+    end
+
+    def newest_by_hash
+      @newest_by_hash ||= @records.each_with_object({}) do |r, newest|
+        hash = (r['torrent'] || {})['hash'].to_s.downcase
+        newest[hash] ||= r unless hash.empty? # records are newest first
+      end
     end
 
     def disk_level
@@ -289,6 +334,13 @@ module TransferDashboard
         unhandled.each { |t| out << "  #{t['name']}" }
       end
 
+      unless @report.jobs.empty?
+        out << '' << 'JOBS:'
+        @report.jobs.first(10).each do |j|
+          out << "  #{j['state'].to_s.ljust(7)} #{j['id']}  #{j['message']}"
+        end
+      end
+
       out << '' << format('%-2s %-12s %-22s %s', '', 'when', 'outcome', 'torrent')
       @report.records.first(@limit).each do |r|
         time = TransferLog.time_of(r)
@@ -350,7 +402,12 @@ module TransferDashboard
       when 'symlink' then 'symlinked into'
       when 'extract_link' then 'extracted and linked into'
       when 'extract_symlink' then 'extracted and symlinked into'
+      when 'promote' then 'promoted to'
       end
+    end
+
+    def job_badge(state)
+      { 'done' => ['done', '✓'], 'failed' => ['failed', '✕'], 'running' => ['running', '…'] }.fetch(state, ['running', '…'])
     end
 
     def size_label(bytes)
@@ -439,6 +496,15 @@ module TransferDashboard
         .badge.ok { background: var(--good); }
         .badge.other { background: var(--text-3); }
         .badge.error { background: var(--critical); }
+        .badge.done { background: var(--good); }
+        .badge.failed { background: var(--critical); }
+        .badge.running { background: var(--accent); }
+        .actions { margin-top: 6px; }
+        .actions button { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--accent); cursor: pointer; }
+        .actions button:hover { border-color: var(--accent); }
+        .actions button:disabled { color: var(--text-3); cursor: default; }
+        .actions .note { font-size: 12px; color: var(--text-2); margin-left: 8px; }
+        .actions .note.error { color: var(--critical); }
         .body > * + * { margin-top: 2px; }
         .name { font-weight: 600; word-break: break-word; }
         .meta { color: var(--text-2); font-size: 13px; }
@@ -529,6 +595,29 @@ module TransferDashboard
         </ul>
         <%- end -%>
 
+        <%- unless @report.jobs.empty? -%>
+        <h2>Jobs</h2>
+        <ul class="list">
+          <%- @report.jobs.each do |j| -%>
+          <%- klass, glyph = job_badge(j['state']) -%>
+          <li class="<%= h(klass) %>">
+            <span class="badge <%= h(klass) %>" aria-label="<%= h(j['state']) %>"><%= glyph %></span>
+            <div class="body">
+              <div class="name"><%= h(j['action'] || j['request']['action']) %> <%= h(j['subject'] || j['request']['hash'] || j['request']['path']) %></div>
+              <div class="meta"><%- if j['finished_at'] -%><%= when_html('ts' => j['finished_at']) %><%- elsif j['started_at'] -%>started <%= when_html('ts' => j['started_at']) %><%- else -%>queued<%- end -%> · <b><%= h(j['state']) %></b><%- if j['request']['via'] -%> · via <%= h(j['request']['via']) %><%- end -%></div>
+              <%- if j['message'] -%><div class="msg"><%= h(j['message']) %></div><%- end -%>
+              <%- unless j['log'].to_s.empty? -%>
+              <details<%= j['state'] == 'failed' ? ' open' : '' %>>
+                <summary>Log</summary>
+                <pre><%= h(j['log']) %></pre>
+              </details>
+              <%- end -%>
+            </div>
+          </li>
+          <%- end -%>
+        </ul>
+        <%- end -%>
+
         <h2>Recent transfers</h2>
         <%- if @report.records.empty? -%>
         <div class="empty">No transfers recorded yet. Records appear here after Transmission runs <code>torrent-finished.sh</code>.</div>
@@ -540,13 +629,17 @@ module TransferDashboard
             <span class="badge <%= h(status) %>" aria-label="<%= h(status_label(status)) %>"><%= TransferDashboard.status_glyph(status) %></span>
             <div class="body">
             <div class="name"><%= h(TransferDashboard.torrent_name(r)) %></div>
-            <div class="meta"><%= when_html(r) %> · <b><%= h(status_label(status)) %></b> · <%= h(outcome_label(r['outcome'])) %><%- if action_label(r) -%> · <%= h(action_label(r)) %> <%= h(File.dirname(r['destination'].to_s)) %><%- end -%></div>
+            <div class="meta"><%= when_html(r) %> · <b><%= h(status_label(status)) %></b> · <%= h(outcome_label(r['outcome'])) %><%- if action_label(r) && r['destination'] -%> · <%= h(action_label(r)) %> <%= h(File.dirname(r['destination'].to_s)) %><%- end -%></div>
             <div class="msg"><%= h(r['message']) %></div>
+            <%- if @report.promotable?(r) -%>
+            <div class="actions"><button type="button" class="promote" data-hash="<%= h(r['torrent']['hash']) %>" data-name="<%= h(TransferDashboard.torrent_name(r)) %>">Promote to NAS</button><span class="note"></span></div>
+            <%- end -%>
             <%- if r['error'] || r['media_file'] || r['repro'] || r['file_command'] -%>
             <details>
               <summary>Details</summary>
               <%- if r['media_file'] -%><div>Media file: <code><%= h(r['media_file']) %></code></div><%- end -%>
               <%- if r['destination'] -%><div>Destination: <code><%= h(r['destination']) %></code></div><%- end -%>
+              <%- if r['job'] -%><div>Job: <code><%= h(r['job']) %></code></div><%- end -%>
               <%- if r['duration_s'] -%><div>Took <%= h(r['duration_s']) %>s<%- if r.key?('notified') -%>, notification <%= r['notified'] ? 'sent' : 'not sent' %><%- end -%></div><%- end -%>
               <%- if r['error'] -%><pre><%= h(r['error']['class']) %>: <%= h(r['error']['message']) %>
       <%= h(Array(r['error']['backtrace']).join("\n")) %></pre><%- end -%>
@@ -593,6 +686,38 @@ module TransferDashboard
         } catch (e) { ok = false; }
         if (ok || !navigator.clipboard) { done(ok); return; }
         navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+      });
+
+      // Promote buttons queue a job for transfers-worker.rb through the CGI at
+      // /transfers/api (see README-transfers.md, "Promoting to the NAS"). The
+      // worker runs asynchronously and regenerates this page when it is done.
+      document.addEventListener('click', function (event) {
+        var button = event.target.closest ? event.target.closest('button.promote') : null;
+        if (!button) { return; }
+        if (!window.confirm('Copy "' + button.getAttribute('data-name') + '" to the NAS and remove it from the local library?')) { return; }
+        var note = button.parentNode.querySelector('.note');
+        button.disabled = true;
+        note.className = 'note';
+        note.textContent = 'Queueing\u2026';
+        var api = document.location.pathname.replace(/[^\/]*$/, '') + 'api';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', api, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-Requested-With', 'transfers');
+        xhr.onload = function () {
+          if (xhr.status === 202) {
+            note.textContent = 'Queued. This page refreshes when the job finishes\u2026';
+            setTimeout(function () { document.location.reload(); }, 8000);
+            return;
+          }
+          var message = 'HTTP ' + xhr.status;
+          try { message = JSON.parse(xhr.responseText).error || message; } catch (e) { /* not JSON */ }
+          note.className = 'note error';
+          note.textContent = 'Could not queue: ' + message;
+          button.disabled = false;
+        };
+        xhr.onerror = function () { note.className = 'note error'; note.textContent = 'Could not reach ' + api; button.disabled = false; };
+        xhr.send(JSON.stringify({ action: 'promote', hash: button.getAttribute('data-hash') }));
       });
       </script>
       </body>
