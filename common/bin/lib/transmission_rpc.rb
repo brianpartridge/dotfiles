@@ -48,9 +48,9 @@ class TransmissionRPC
     @session_id = nil
   end
 
-  # All torrents Transmission knows about, with TORRENT_FIELDS.
-  def torrents
-    call('torrent-get', 'fields' => TORRENT_FIELDS).fetch('torrents', [])
+  # All torrents Transmission knows about, with TORRENT_FIELDS unless told otherwise.
+  def torrents(fields: TORRENT_FIELDS)
+    call('torrent-get', 'fields' => fields).fetch('torrents', [])
   end
 
   # Session settings, including 'download-dir' and 'download-dir-free-space'.

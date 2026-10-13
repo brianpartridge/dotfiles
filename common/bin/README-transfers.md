@@ -14,7 +14,8 @@ about it, and how to see what happened to recent transfers.
 | `lib/transfer_log.rb` | Append-only JSONL record of every run: `~/logs/transfers.jsonl`. The dashboard reads this, not the text log. |
 | `lib/notify.rb` | Pushover client. Never raises. `lib/tweet.rb` now delegates here, so `tvrss.rb` and `wishlist-downloader.rb` notify too. |
 | `lib/transmission_rpc.rb` | Asks Transmission which torrents exist and whether they are complete. |
-| `lib/transfer_dashboard.rb`, `transfers-dashboard.rb` | Static HTML dashboard and terminal view. |
+| `lib/transfer_dashboard.rb`, `transfers-dashboard.rb` | Static HTML dashboard and terminal view. Also regenerates the media page. |
+| `lib/media_inventory.rb`, `lib/media_dashboard.rb`, `media-dashboard.rb` | The media page: every TV episode and movie, where it is and what it costs (see "The media page"). |
 | `lib/media_config.rb` | Where everything lives: library, Dropbox media folders, the NAS, the job queue. |
 | `lib/promoter.rb`, `lib/job_queue.rb`, `lib/transfers_worker.rb`, `transfers-worker.rb` | Promoting items to the NAS, triggered from the dashboard and run in the background (see below). |
 | `../web/cgi/transfers-api.rb` | The dashboard's one write endpoint, run by Apache: it only drops a request file into the queue. |
@@ -166,6 +167,43 @@ Notifications you will get:
 - **Promoted to NAS** / **Promote failed** (high priority) for jobs started
   from the dashboard, below.
 
+## The media page
+
+`http://<mac-name>.local/transfers/media/` (linked from the top of the
+transfers dashboard) lists every TV episode and movie that is in
+Transmission or in the local library, one row per torrent with its video
+files beneath, and says for each file where it is:
+
+- **In Transmission**: seeding (with ratio), stopped, or downloading.
+- **In the local library**: the folder, and how: a hardlink (the normal
+  case, stored once), a symlink, or a separate copy (stored twice).
+- **On the NAS**: from the transfer log's promotion records and any
+  `--keep-link` symlink, never by scanning `/Volumes/Media`. When the NAS
+  happens to be mounted each promoted file is confirmed with a single stat.
+
+Matching is by identity (device and inode) or symlink target, so renames on
+either side do not matter. Videos extracted from an archive are included
+with their torrent although Transmission does not list them. Torrents with
+no video (books, music) are left out. The kind (TV or movie) comes from the
+transfer log, else from the library folder, else from the name.
+
+The tiles total it up: library size, Transmission size, bytes stored once
+(library hardlinks into the downloads), and **reclaimable**, the space that
+removing every finished torrent with its data would free, counting only
+what the library does not hardlink. Each row carries its own "removing
+frees" figure. A row that needs attention says why: a library symlink into
+the downloads (removing the torrent data would break it), a duplicate copy,
+a broken link, a file Transmission expects that is not on disk.
+
+Filters: search, state, kind, on the NAS or not, and sort order, remembered
+per browser. The page regenerates with the transfers dashboard (every 30
+minutes and after every job); `media-dashboard.rb` regenerates it alone,
+`--text` prints it, `--json` dumps what the page is built from
+(`media.json` next to the page).
+
+There are no buttons on this page yet; removing torrents and library files
+from it is the next step.
+
 ## Promoting to the NAS
 
 The local library (`~/Media/tv`, `~/Media/movies`) is hardlinks into the
@@ -225,6 +263,8 @@ dashboard. Old job folders can be deleted at any time.
 | Dashboard 404s or is not reachable | `sudo apachectl status` or `curl -I http://localhost/transfers/` on the Mac; make sure the launch daemon was loaded with `-w` so Apache survives a reboot. |
 | Free-space tile missing | It needs Transmission's remote access (the download folder comes from `session-get`); the figures come from `df` on that folder, or from Transmission's own number when `df` cannot run. |
 | Dashboard shows "Transmission unreachable" | Remote access is off, or `transmission.json` is wrong. Everything else still works. |
+| Media page missing or stale while the transfers page is fine | `transfers-dashboard.rb` prints `media page not written: ...` when the media scan fails; run `media-dashboard.rb` by hand to see the error. |
+| A library file shows as "separate copy" | It is not a hardlink of the download (copied by hand, or filed before the switch to hardlinks); `media-hardlinks.rb --apply` converts symlinks, a copy has to be relinked by hand. |
 | Promote button says "Could not queue" | The message is the CGI's: `403` means the header did not arrive (a proxy stripped it?), `404` means `transmission.conf` is not loaded in Apache, `500` means `~/logs/transfers-queue` is missing or not `chmod 1777`. |
 | Promote queued but nothing happens | The worker's launch agent is not loaded, or `~/logs/transfers-worker.out` has the crash. Run `transfers-worker.rb` by hand to see it. A request that was not valid JSON is parked in `~/logs/transfers-queue/rejected/`. |
 | Job failed with "NAS is not mounted" | Mount `/Volumes/Media` in the Finder, then click Promote again (or `transfers-worker.rb promote <hash>`). Nothing was changed locally. |

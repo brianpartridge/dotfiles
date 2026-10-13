@@ -2,6 +2,7 @@
 
 require 'logger'
 require_relative 'job_queue'
+require_relative 'media_dashboard'
 require_relative 'notify'
 require_relative 'promoter'
 require_relative 'transfer_dashboard'
@@ -14,13 +15,23 @@ class TransfersWorker
   ACTIONS = %w[promote].freeze
 
   def initialize(queue:, promoter:, transfer_log: TransferLog.new, logger: Logger.new($stdout),
-                 regenerate: lambda { TransferDashboard.generate(quiet: true) }, notify: Notify.method(:push))
+                 regenerate: TransfersWorker.method(:regenerate_dashboards), notify: Notify.method(:push))
     @queue = queue
     @promoter = promoter
     @transfer_log = transfer_log
     @log = logger
     @regenerate = regenerate
     @notify = notify
+  end
+
+  # Both pages; the media page's failure is logged, never fatal.
+  def self.regenerate_dashboards
+    TransferDashboard.generate(quiet: true)
+    begin
+      MediaDashboard.generate(quiet: true)
+    rescue StandardError => e
+      warn "media page not written: #{e.class}: #{e.message}"
+    end
   end
 
   # Processes everything in the queue. Returns the jobs run.
