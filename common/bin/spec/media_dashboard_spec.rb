@@ -52,6 +52,7 @@ describe MediaDashboard do
         expect(html).to include('Alone &lt;b&gt;.2000.mkv')
         expect(html).not_to include('Alone <b>')
         expect(html).to include('data-state="unfiled"', 'data-kind="movie"', 'data-nas="no"')
+        expect(html).to include('data-age="1"', 'data-age="10"', '<option value="over100">Over 100 days</option>', '<option value="under30">Under 30 days</option>')
         expect(html).to include("localStorage.setItem('media-filters'")
         json = JSON.parse(File.read(File.join(dir, 'www', 'media', 'media.json')))
         expect(json['totals']).to include('library_bytes' => 3_000_000, 'torrent_bytes' => 5_000_000, 'shared_bytes' => 2_000_000,

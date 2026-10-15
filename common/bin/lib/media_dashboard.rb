@@ -26,6 +26,12 @@ module MediaDashboard
   }.freeze
 
   SHOW_FREES_FROM = 1_000_000 # below this, "removing frees" is just .nfo files and samples
+  # Age filter choices: value => label. "over N" and "under N" days, from
+  # when the torrent finished (or the file's date for library-only rows).
+  AGE_FILTERS = [
+    ['', 'Any age'], ['under30', 'Under 30 days'], ['over30', 'Over 30 days'], ['over100', 'Over 100 days'],
+    ['over180', 'Over 180 days'], ['over365', 'Over a year']
+  ].freeze
 
   module_function
 
@@ -165,6 +171,14 @@ module MediaDashboard
       ''
     end
 
+    # Whole days since the group finished (or its file's date); -1 when unknown.
+    def age_days(group)
+      time = group.when
+      return -1 unless time
+
+      [((@inv.generated_at - time) / 86_400).floor, 0].max
+    end
+
     def nas_label(item)
       return nil unless item.on_nas?
 
@@ -263,6 +277,11 @@ module MediaDashboard
             <option value="yes">On the NAS</option>
             <option value="no">Not on the NAS</option>
           </select>
+          <select id="age" aria-label="Age">
+            <%- AGE_FILTERS.each do |value, label| -%>
+            <option value="<%= h(value) %>"><%= h(label) %></option>
+            <%- end -%>
+          </select>
           <select id="sort" aria-label="Sort">
             <option value="when">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -280,7 +299,7 @@ module MediaDashboard
         <ul class="list" id="groups">
           <%- @inv.groups.each do |g| -%>
           <%- t = g.torrent -%>
-          <li class="group" data-name="<%= h(g.name.downcase) %>" data-size="<%= g.size %>" data-frees="<%= g.frees_if_removed %>" data-when="<%= g.when ? g.when.to_i : 0 %>" data-ratio="<%= t ? t['ratio'] : 99 %>">
+          <li class="group" data-name="<%= h(g.name.downcase) %>" data-size="<%= g.size %>" data-frees="<%= g.frees_if_removed %>" data-when="<%= g.when ? g.when.to_i : 0 %>" data-age="<%= age_days(g) %>" data-ratio="<%= t ? t['ratio'] : 99 %>">
             <span class="badge <%= h(STATE_CLASSES.fetch(g.state, 'other')) %>" aria-label="<%= h(MediaDashboard.state_label(g.state)) %>"><%= STATE_GLYPHS.fetch(g.state, '?') %></span>
             <div class="body">
               <div class="name"><%= h(g.name) %> <span class="kind"><%= h(MediaDashboard.kind_label(g.kind)) %></span></div>
@@ -324,19 +343,22 @@ module MediaDashboard
       (function () {
         var groups = Array.prototype.slice.call(document.querySelectorAll('li.group'));
         var list = document.getElementById('groups');
-        var controls = ['q', 'state', 'kind', 'nas', 'sort'].map(function (id) { return document.getElementById(id); });
+        var controls = ['q', 'state', 'kind', 'nas', 'age', 'sort'].map(function (id) { return document.getElementById(id); });
         var saved = {};
         try { saved = JSON.parse(localStorage.getItem('media-filters') || '{}'); } catch (e) { saved = {}; }
         controls.forEach(function (c) { if (saved[c.id] !== undefined) { c.value = saved[c.id]; } });
 
         function apply() {
-          var q = controls[0].value.toLowerCase(), state = controls[1].value, kind = controls[2].value, nas = controls[3].value, sort = controls[4].value;
+          var q = controls[0].value.toLowerCase(), state = controls[1].value, kind = controls[2].value, nas = controls[3].value, age = controls[4].value, sort = controls[5].value;
+          var ageMatch = age.match(/^(over|under)(\d+)$/);
           var shown = 0, total = 0;
           groups.forEach(function (g) {
             var any = false;
+            var days = parseInt(g.getAttribute('data-age'), 10);
+            var ageOk = !ageMatch || (days >= 0 && (ageMatch[1] === 'over' ? days > parseInt(ageMatch[2], 10) : days < parseInt(ageMatch[2], 10)));
             Array.prototype.forEach.call(g.querySelectorAll('li.file'), function (f) {
               total += 1;
-              var ok = (!q || f.getAttribute('data-name').indexOf(q) >= 0 || g.getAttribute('data-name').indexOf(q) >= 0) &&
+              var ok = ageOk && (!q || f.getAttribute('data-name').indexOf(q) >= 0 || g.getAttribute('data-name').indexOf(q) >= 0) &&
                        (!state || (state === 'attention' ? f.getAttribute('data-attention') === 'yes' : f.getAttribute('data-state') === state)) &&
                        (!kind || f.getAttribute('data-kind') === kind) &&
                        (!nas || f.getAttribute('data-nas') === nas);

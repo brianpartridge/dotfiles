@@ -196,8 +196,10 @@ frees" figure. A row that needs attention says why: a library symlink into
 the downloads (removing the torrent data would break it), a duplicate copy,
 a broken link, a file Transmission expects that is not on disk.
 
-Filters: search, state, kind, on the NAS or not, and sort order, remembered
-per browser. The page regenerates with the transfers dashboard (every 30
+Filters: search, state, kind, on the NAS or not, age (under 30 days; over
+30, 100, 180 days or a year, counted from when the torrent finished), and
+sort order, remembered per browser. "Over 100 days" plus "Seeding, in
+library" is the list of things that have seeded long enough. The page regenerates with the transfers dashboard (every 30
 minutes and after every job); `media-dashboard.rb` regenerates it alone,
 `--text` prints it, `--json` dumps what the page is built from
 (`media.json` next to the page).
