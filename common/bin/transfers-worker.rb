@@ -6,8 +6,10 @@
 # com.brianpartridge.transfers-worker.plist); it can also be run by hand.
 #
 #   transfers-worker.rb                            process queued requests
-#   transfers-worker.rb promote HASH|PATH [--keep-link]   run one promotion now
-#   transfers-worker.rb enqueue promote HASH|PATH [--keep-link]   queue it for launchd
+#   transfers-worker.rb promote HASH|PATH [--keep-link]          run one promotion now
+#   transfers-worker.rb remove_torrent HASH [--remove-library]   remove torrent and data
+#   transfers-worker.rb unlink_library HASH|PATH                 remove local library entries
+#   transfers-worker.rb enqueue ACTION ...                       queue it for launchd instead
 #
 # See README-transfers.md, "Promoting to the NAS".
 
@@ -28,11 +30,12 @@ worker = TransfersWorker.new(queue: queue, promoter: promoter, logger: logger)
 def request_from(args)
   action = args.shift
   subject = args.shift
-  abort "Usage: transfers-worker.rb [enqueue] #{TransfersWorker::ACTIONS.join('|')} HASH|PATH [--keep-link]" if subject.nil?
+  abort "Usage: transfers-worker.rb [enqueue] #{TransfersWorker::ACTIONS.join('|')} HASH|PATH [--keep-link] [--remove-library]" if subject.nil?
   abort "Unknown action #{action}" unless TransfersWorker::ACTIONS.include?(action)
 
   params = subject =~ /\A[0-9a-f]{40}\z/i ? { 'hash' => subject.downcase } : { 'path' => File.expand_path(subject) }
   params['keep_link'] = true if args.include?('--keep-link')
+  params['keep_library'] = false if args.include?('--remove-library')
   [action, params]
 end
 

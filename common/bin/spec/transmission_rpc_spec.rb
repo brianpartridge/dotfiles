@@ -19,6 +19,17 @@ describe TransmissionRPC do
     expect(rpc.instance_variable_get(:@session_id)).to eq('sess')
   end
 
+  it 'asks for extra fields and removes torrents with or without their data' do
+    seen = []
+    allow(rpc).to receive(:post) { |body| seen << JSON.parse(body); FakeResponse.new('200', '{"result":"success","arguments":{}}', {}) }
+    rpc.torrents(fields: %w[id files])
+    rpc.remove([3, 'a' * 40], delete_data: true)
+    rpc.remove(4)
+    expect(seen[0]).to eq('method' => 'torrent-get', 'arguments' => { 'fields' => %w[id files] })
+    expect(seen[1]).to eq('method' => 'torrent-remove', 'arguments' => { 'ids' => [3, 'a' * 40], 'delete-local-data' => true })
+    expect(seen[2]['arguments']).to eq('ids' => [4], 'delete-local-data' => false)
+  end
+
   it 'fetches the session' do
     allow(rpc).to receive(:post).and_return(FakeResponse.new('200', '{"result":"success","arguments":{"download-dir":"/dl","download-dir-free-space":123}}', {}))
     expect(rpc.session).to eq('download-dir' => '/dl', 'download-dir-free-space' => 123)

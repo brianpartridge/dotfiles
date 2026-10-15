@@ -98,6 +98,73 @@ describe TransfersWorker do
     end
   end
 
+  describe 'remove_torrent and unlink_library' do
+    def with_remover(w)
+      @remover = instance_double(MediaRemover)
+      w.instance_variable_set(:@remover, @remover)
+    end
+
+    it 'removes a torrent, records what was freed and kept, and notifies' do
+      with_tmpdir do |dir|
+        w = setup(dir)
+        with_remover(w)
+        file_record(File.join(@media, 'tv', 'Show.S01E01.mkv'))
+        expect(@remover).to receive(:remove_torrent).with(HASH, keep_library: true)
+                                                   .and_return('torrent' => 'Show.S01E01', 'hash' => HASH, 'freed' => 2_500_000_000,
+                                                               'kept' => [File.join(@media, 'tv', 'Show.S01E01.mkv')], 'removed_library' => [], 'ratio' => 1.8)
+        job = @queue.take(@queue.enqueue('remove_torrent', 'hash' => HASH))
+        w.run(job)
+        expect(job.status).to include('state' => 'done', 'message' => 'Removed Show.S01E01 from Transmission (ratio 1.8), freed 2.5 GB; 1 library file(s) kept')
+        record = @log.records.first
+        expect(record).to include('status' => 'ok', 'outcome' => 'tv', 'action' => 'remove', 'freed' => 2_500_000_000, 'job' => job.id)
+        expect(record['torrent']).to eq('name' => 'Show.S01E01', 'hash' => HASH)
+        expect(record['repro']).to end_with("remove_torrent #{HASH}")
+        expect(@pushes.first.last).to include(title: 'Torrent removed')
+        expect(@refreshes).to eq(1)
+      end
+    end
+
+    it 'passes keep_library false through and says the library files went' do
+      with_tmpdir do |dir|
+        w = setup(dir)
+        with_remover(w)
+        expect(@remover).to receive(:remove_torrent).with(HASH, keep_library: false)
+                                                   .and_return('torrent' => 'X', 'hash' => HASH, 'freed' => 10, 'kept' => [], 'removed_library' => ['/m/tv/x.mkv'], 'ratio' => 0.5)
+        job = @queue.take(@queue.enqueue('remove_torrent', 'hash' => HASH, 'keep_library' => false))
+        w.run(job)
+        expect(job.status['message']).to end_with('1 library file(s) removed')
+        expect(@log.records.first['repro']).to end_with(' --remove-library')
+        expect(@log.records.first['outcome']).to eq('unknown_media') # no transfer record for it
+      end
+    end
+
+    it 'unlinks library entries by hash or path' do
+      with_tmpdir do |dir|
+        w = setup(dir)
+        with_remover(w)
+        expect(@remover).to receive(:unlink_library).with(hash: nil, path: '/m/tv/a.mkv').and_return('removed_library' => ['/m/tv/a.mkv'])
+        job = @queue.take(@queue.enqueue('unlink_library', 'path' => '/m/tv/a.mkv'))
+        w.run(job)
+        expect(job.status).to include('state' => 'done', 'message' => 'Removed a.mkv from the local library')
+        expect(@log.records.first).to include('action' => 'unlink', 'outcome' => 'file', 'torrent' => { 'name' => 'a.mkv' })
+        expect(@pushes.first.last).to include(title: 'Removed from library')
+      end
+    end
+
+    it 'turns a remover error into a failed job with a high-priority push' do
+      with_tmpdir do |dir|
+        w = setup(dir)
+        with_remover(w)
+        allow(@remover).to receive(:remove_torrent).and_raise(RuntimeError, 'still downloading (30%)')
+        job = @queue.take(@queue.enqueue('remove_torrent', 'hash' => HASH))
+        w.run(job)
+        expect(job.status).to include('state' => 'failed', 'message' => 'RuntimeError: still downloading (30%)')
+        expect(@log.records.first).to include('status' => 'error', 'action' => 'remove_torrent')
+        expect(@pushes.first.last).to include(title: 'Remove_torrent failed', priority: :high)
+      end
+    end
+  end
+
   it 'keeps going when the dashboard refresh fails' do
     with_tmpdir do |dir|
       w = setup(dir)

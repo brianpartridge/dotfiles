@@ -2,6 +2,8 @@
 
 require 'logger'
 require_relative 'job_queue'
+require_relative 'media_dashboard'
+require_relative 'media_remover'
 require_relative 'notify'
 require_relative 'promoter'
 require_relative 'transfer_dashboard'
@@ -11,16 +13,27 @@ require_relative 'transfer_log'
 # the transfer log so the dashboard and the web UI show the new state, the
 # job's own status and log files, a notification, and a dashboard refresh.
 class TransfersWorker
-  ACTIONS = %w[promote].freeze
+  ACTIONS = %w[promote remove_torrent unlink_library].freeze
 
-  def initialize(queue:, promoter:, transfer_log: TransferLog.new, logger: Logger.new($stdout),
-                 regenerate: lambda { TransferDashboard.generate(quiet: true) }, notify: Notify.method(:push))
+  def initialize(queue:, promoter:, remover: nil, transfer_log: TransferLog.new, logger: Logger.new($stdout),
+                 regenerate: TransfersWorker.method(:regenerate_dashboards), notify: Notify.method(:push))
     @queue = queue
     @promoter = promoter
+    @remover = remover
     @transfer_log = transfer_log
     @log = logger
     @regenerate = regenerate
     @notify = notify
+  end
+
+  # Both pages; the media page's failure is logged, never fatal.
+  def self.regenerate_dashboards
+    TransferDashboard.generate(quiet: true)
+    begin
+      MediaDashboard.generate(quiet: true)
+    rescue StandardError => e
+      warn "media page not written: #{e.class}: #{e.message}"
+    end
   end
 
   # Processes everything in the queue. Returns the jobs run.
@@ -95,6 +108,46 @@ class TransfersWorker
     )
     @notify.call(message, title: 'Promoted to NAS', url: TransferDashboard.url, url_title: 'Open the dashboard')
     message
+  end
+
+  # Remove a torrent and its data; the library keeps its bytes unless asked otherwise.
+  def do_remove_torrent(job, request)
+    keep = request['keep_library'] != false
+    record = record_for(request['hash'])
+    result = remover.remove_torrent(request['hash'], keep_library: keep)
+    result['kept'].each { |p| job.log "Kept in library: #{p}" }
+    result['removed_library'].each { |p| job.log "Removed from library: #{p}" }
+    message = "Removed #{result['torrent']} from Transmission (ratio #{result['ratio']}), freed #{TransferDashboard.size_label(result['freed'])}"
+    message += keep ? "; #{result['kept'].count} library file(s) kept" : "; #{result['removed_library'].count} library file(s) removed"
+    @transfer_log.append(
+      'status' => 'ok', 'outcome' => record ? record['outcome'] : 'unknown_media', 'action' => 'remove', 'message' => message,
+      'media_file' => nil, 'destination' => nil, 'freed' => result['freed'], 'kept' => result['kept'],
+      'torrent' => record ? record['torrent'] : { 'name' => result['torrent'], 'hash' => result['hash'] }, 'job' => job.id,
+      'repro' => "#{worker_path} remove_torrent #{request['hash']}#{keep ? '' : ' --remove-library'}"
+    )
+    @notify.call(message, title: 'Torrent removed', url: TransferDashboard.url, url_title: 'Open the dashboard')
+    message
+  end
+
+  # Remove local library entries only (bytes stay with the download and the NAS).
+  def do_unlink_library(job, request)
+    record = request['hash'] ? record_for(request['hash']) : nil
+    result = remover.unlink_library(hash: request['hash'], path: request['path'])
+    result['removed_library'].each { |p| job.log "Removed from library: #{p}" }
+    names = result['removed_library'].map { |p| File.basename(p) }
+    message = names.count == 1 ? "Removed #{names.first} from the local library" : "Removed #{names.count} files from the local library"
+    @transfer_log.append(
+      'status' => 'ok', 'outcome' => record ? record['outcome'] : 'file', 'action' => 'unlink', 'message' => message,
+      'media_file' => result['removed_library'].first, 'destination' => nil, 'job' => job.id,
+      'torrent' => record ? record['torrent'] : { 'name' => names.first },
+      'repro' => "#{worker_path} unlink_library #{request['hash'] || request['path']}"
+    )
+    @notify.call(message, title: 'Removed from library', url: TransferDashboard.url, url_title: 'Open the dashboard')
+    message
+  end
+
+  def remover
+    @remover ||= MediaRemover.new(rpc: TransmissionRPC.from_config, media_root: MediaConfig::MEDIA_ROOT, logger: @log)
   end
 
   def promote_message(results)

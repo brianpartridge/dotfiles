@@ -78,6 +78,103 @@ module TransferDashboard
   CRITICAL_SPACE_FRACTION = 0.05
   CRITICAL_SPACE_BYTES = 10 * 1000 * 1000 * 1000
 
+  # Styles shared by the transfers and media pages (lib/media_dashboard.rb).
+  BASE_CSS = <<~'CSS'
+      :root {
+        color-scheme: light dark;
+        --surface: #fcfcfb;
+        --surface-2: #f1f1ee;
+        --border: #dededa;
+        --text: #0b0b0b;
+        --text-2: #52514e;
+        --text-3: #7a7974;
+        --good: #0ca30c;
+        --warning: #b57a00;
+        --critical: #d03b3b;
+        --accent: #2a78d6;
+        --meter-track: #d6e4f5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --surface: #1a1a19;
+          --surface-2: #242423;
+          --border: #3a3a38;
+          --text: #ffffff;
+          --text-2: #c3c2b7;
+          --text-3: #8d8c85;
+          --good: #0ca30c;
+          --warning: #fab219;
+          --critical: #d03b3b;
+          --accent: #3987e5;
+          --meter-track: #2b3a4d;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 16px;
+        background: var(--surface); color: var(--text);
+        font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      }
+      main { max-width: 860px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 2px; }
+      h2 { font-size: 15px; margin: 28px 0 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+      .sub { color: var(--text-3); font-size: 13px; margin: 0 0 18px; }
+    .sub a { color: var(--accent); text-decoration: none; }
+    .sub b { color: var(--text-2); }
+      .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+      .tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+      .tile .label { font-size: 12px; color: var(--text-2); }
+      .tile .value { font-size: 30px; font-weight: 600; line-height: 1.15; margin-top: 4px; }
+      .tile .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; overflow-wrap: anywhere; }
+      .tile .meter { margin-top: 8px; }
+      .tile.low .meter span { background: var(--warning); }
+      .tile.fail .meter span { background: var(--critical); }
+      .tile.low .value::before { background: var(--warning); }
+      .tile.other .value::before, .tile.fail .value::before, .tile.ok .value::before {
+        display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 8px 4px 0; content: "";
+      }
+      .tile.ok .value::before { background: var(--good); }
+      .tile.other .value::before { background: var(--text-3); }
+      .tile.fail .value::before { background: var(--critical); }
+      .notice { border-left: 3px solid var(--warning); background: var(--surface-2); padding: 10px 12px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+      .notice.critical { border-color: var(--critical); }
+      ul.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+      ul.list li { padding: 10px 12px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
+      ul.list li:first-child { border-top: 0; }
+      .badge { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+      .badge.ok { background: var(--good); }
+      .badge.other { background: var(--text-3); }
+      .badge.error { background: var(--critical); }
+      .badge.done { background: var(--good); }
+      .badge.failed { background: var(--critical); }
+      .badge.running { background: var(--accent); }
+      .actions { margin-top: 6px; }
+      .actions button { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--accent); cursor: pointer; }
+      .actions button:hover { border-color: var(--accent); }
+      .actions button:disabled { color: var(--text-3); cursor: default; }
+      .actions .note { font-size: 12px; color: var(--text-2); margin-left: 8px; }
+      .actions .note.error { color: var(--critical); }
+      .body > * + * { margin-top: 2px; }
+      .name { font-weight: 600; word-break: break-word; }
+      .meta { color: var(--text-2); font-size: 13px; }
+      .meta b { font-weight: 600; color: var(--text); }
+      .msg { font-size: 13px; color: var(--text-2); word-break: break-word; }
+      li.error .msg { color: var(--text); }
+      details { font-size: 12px; margin-top: 4px; }
+      summary { cursor: pointer; color: var(--accent); }
+      pre { background: var(--surface-2); padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0 0; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+      .cmd { position: relative; }
+      .cmd pre { padding-right: 64px; }
+      .cmd button { position: absolute; top: 10px; right: 6px; font: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--accent); cursor: pointer; }
+      .cmd button:hover { border-color: var(--accent); }
+      code { font-size: 12px; }
+      .meter { position: relative; height: 6px; border-radius: 3px; background: var(--meter-track); margin-top: 6px; overflow: hidden; }
+      .meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+      .empty { color: var(--text-3); font-size: 14px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; }
+      time { font-variant-numeric: tabular-nums; }
+      footer { color: var(--text-3); font-size: 12px; margin: 28px 0 8px; }
+  CSS
+
   # Everything the dashboard shows, gathered once.
   class Report
     attr_reader :records, :torrents, :rpc_error, :generated_at, :disk, :jobs
@@ -433,103 +530,13 @@ module TransferDashboard
       <meta name="color-scheme" content="light dark">
       <title>Transfers</title>
       <style>
-        :root {
-          color-scheme: light dark;
-          --surface: #fcfcfb;
-          --surface-2: #f1f1ee;
-          --border: #dededa;
-          --text: #0b0b0b;
-          --text-2: #52514e;
-          --text-3: #7a7974;
-          --good: #0ca30c;
-          --warning: #b57a00;
-          --critical: #d03b3b;
-          --accent: #2a78d6;
-          --meter-track: #d6e4f5;
-        }
-        @media (prefers-color-scheme: dark) {
-          :root:not([data-theme="light"]) {
-            --surface: #1a1a19;
-            --surface-2: #242423;
-            --border: #3a3a38;
-            --text: #ffffff;
-            --text-2: #c3c2b7;
-            --text-3: #8d8c85;
-            --good: #0ca30c;
-            --warning: #fab219;
-            --critical: #d03b3b;
-            --accent: #3987e5;
-            --meter-track: #2b3a4d;
-          }
-        }
-        * { box-sizing: border-box; }
-        body {
-          margin: 0; padding: 16px;
-          background: var(--surface); color: var(--text);
-          font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-        }
-        main { max-width: 860px; margin: 0 auto; }
-        h1 { font-size: 22px; margin: 0 0 2px; }
-        h2 { font-size: 15px; margin: 28px 0 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
-        .sub { color: var(--text-3); font-size: 13px; margin: 0 0 18px; }
-        .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-        .tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-        .tile .label { font-size: 12px; color: var(--text-2); }
-        .tile .value { font-size: 30px; font-weight: 600; line-height: 1.15; margin-top: 4px; }
-        .tile .sub { font-size: 12px; color: var(--text-3); margin-top: 4px; overflow-wrap: anywhere; }
-        .tile .meter { margin-top: 8px; }
-        .tile.low .meter span { background: var(--warning); }
-        .tile.fail .meter span { background: var(--critical); }
-        .tile.low .value::before { background: var(--warning); }
-        .tile.other .value::before, .tile.fail .value::before, .tile.ok .value::before {
-          display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 8px 4px 0; content: "";
-        }
-        .tile.ok .value::before { background: var(--good); }
-        .tile.other .value::before { background: var(--text-3); }
-        .tile.fail .value::before { background: var(--critical); }
-        .notice { border-left: 3px solid var(--warning); background: var(--surface-2); padding: 10px 12px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
-        .notice.critical { border-color: var(--critical); }
-        ul.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-        ul.list li { padding: 10px 12px; border-top: 1px solid var(--border); display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; }
-        ul.list li:first-child { border-top: 0; }
-        .badge { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
-        .badge.ok { background: var(--good); }
-        .badge.other { background: var(--text-3); }
-        .badge.error { background: var(--critical); }
-        .badge.done { background: var(--good); }
-        .badge.failed { background: var(--critical); }
-        .badge.running { background: var(--accent); }
-        .actions { margin-top: 6px; }
-        .actions button { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--accent); cursor: pointer; }
-        .actions button:hover { border-color: var(--accent); }
-        .actions button:disabled { color: var(--text-3); cursor: default; }
-        .actions .note { font-size: 12px; color: var(--text-2); margin-left: 8px; }
-        .actions .note.error { color: var(--critical); }
-        .body > * + * { margin-top: 2px; }
-        .name { font-weight: 600; word-break: break-word; }
-        .meta { color: var(--text-2); font-size: 13px; }
-        .meta b { font-weight: 600; color: var(--text); }
-        .msg { font-size: 13px; color: var(--text-2); word-break: break-word; }
-        li.error .msg { color: var(--text); }
-        details { font-size: 12px; margin-top: 4px; }
-        summary { cursor: pointer; color: var(--accent); }
-        pre { background: var(--surface-2); padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0 0; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
-        .cmd { position: relative; }
-        .cmd pre { padding-right: 64px; }
-        .cmd button { position: absolute; top: 10px; right: 6px; font: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--accent); cursor: pointer; }
-        .cmd button:hover { border-color: var(--accent); }
-        code { font-size: 12px; }
-        .meter { position: relative; height: 6px; border-radius: 3px; background: var(--meter-track); margin-top: 6px; overflow: hidden; }
-        .meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-        .empty { color: var(--text-3); font-size: 14px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; }
-        time { font-variant-numeric: tabular-nums; }
-        footer { color: var(--text-3); font-size: 12px; margin: 28px 0 8px; }
+<%= TransferDashboard::BASE_CSS %>
       </style>
       </head>
       <body>
       <main>
         <h1>Transfers</h1>
-        <p class="sub">Generated <%= h(@report.generated_at.strftime('%a %b %e, %H:%M')) %></p>
+        <p class="sub">Generated <%= h(@report.generated_at.strftime('%a %b %e, %H:%M')) %> · <b>Transfers</b> · <a href="media/">Media</a></p>
 
         <%- week = @report.counts(WEEK); unhandled = @report.unhandled -%>
         <section class="tiles" aria-label="Last 7 days">
