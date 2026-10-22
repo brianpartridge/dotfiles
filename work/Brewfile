@@ -18,6 +18,7 @@ brew "uv"
 
 # Other tools
 brew "actionlint"
+brew "git-lfs"
 brew "graphviz"
 brew "poppler"
 
