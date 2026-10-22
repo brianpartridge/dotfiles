@@ -24,9 +24,9 @@ For example, each location can have a .bash\_profile\_ex file which will be sour
 
         cd ~/dotfiles
     
-- Symlink the .file into place with stow. 
+- Symlink the .file into place with stow. The `.stowrc` file sets the target to `~` and ignores `.DS_Store` files.
 
-        stow --ignore ".DS_Store" common home-laptop 
+        stow common home-laptop
     
 - When a change is made in one environment, push it to the remote so other environments can sync up.
 
