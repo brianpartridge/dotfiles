@@ -26,7 +26,7 @@ For example, each config can have a .bash\_profile\_ex file which will be source
 
     Each top-level folder except common is a config. Use `none` to link only common. With no config, the script shows the configs and how to install one.
 
-    The script installs Homebrew if it is not installed. Then it runs `brew bundle` on `common/Brewfile` and on the Brewfile of the config, if the config has one. Use `--no-brew` to skip these steps, for example `~/dotfiles/install.sh --no-brew home-laptop`.
+    The script installs Homebrew if it is not installed. It downloads the signed Homebrew package for the version in `install.sh`. Before it installs the package, it checks the checksum, the Developer ID team and the Apple notarization. To change the Homebrew version, change `HOMEBREW_VERSION` and `HOMEBREW_PKG_SHA256` in `install.sh`. Then it runs `brew bundle` on `common/Brewfile` and on the Brewfile of the config, if the config has one. Use `--no-brew` to skip these steps, for example `~/dotfiles/install.sh --no-brew home-laptop`.
 
     If a real file in your home folder blocks a link, the script removes it only when it is the same as the copy in dotfiles. If the file is different, the script stops and shows the difference.
 

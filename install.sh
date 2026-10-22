@@ -11,6 +11,9 @@
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+HOMEBREW_VERSION="7.0.10"
+HOMEBREW_PKG_SHA256="ae13b8b0ac910730d3e982a9e7518288d17fd0ad272e42f412027e8ab4555575"
+HOMEBREW_TEAM_ID="927JGANW46"
 STOW_OPTS=(--dir "$DOTFILES" --target "$HOME" --ignore '\.DS_Store' --ignore 'Brewfile')
 
 die() {
@@ -39,15 +42,49 @@ usage() {
   echo "Example: $0 $(configs | head -n 1)"
 }
 
-install_homebrew() {
+# Load brew into this shell if Homebrew is installed.
+load_homebrew() {
   command -v brew >/dev/null && return
-  echo "Installing Homebrew. The installer asks for your password."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   local brew
   for brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do
     [[ -x "$brew" ]] && eval "$("$brew" shellenv)" && return
   done
-  die "Homebrew installed, but brew is not in /opt/homebrew or /usr/local"
+  return 1
+}
+
+# Install Homebrew from its signed package, not from a script piped to bash.
+# The script stops if the checksum, signature or notarization is not correct.
+# To update, change HOMEBREW_VERSION and HOMEBREW_PKG_SHA256. Get the checksum
+# from the release page or from `shasum -a 256 Homebrew.pkg`.
+install_homebrew() {
+  load_homebrew && return
+
+  if ! xcode-select -p >/dev/null 2>&1; then
+    xcode-select --install || true
+    die "install the Xcode Command Line Tools in the window that opens, then run this script again"
+  fi
+
+  local tmp pkg signature
+  tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064 # Expand $tmp now. It is local to this function.
+  trap "rm -rf '$tmp'" EXIT
+  pkg="$tmp/Homebrew-$HOMEBREW_VERSION.pkg"
+  echo "Downloading Homebrew $HOMEBREW_VERSION."
+  curl -fsSL -o "$pkg" \
+    "https://github.com/Homebrew/brew/releases/download/$HOMEBREW_VERSION/Homebrew.pkg"
+
+  [[ "$(shasum -a 256 "$pkg" | cut -d ' ' -f 1)" == "$HOMEBREW_PKG_SHA256" ]] ||
+    die "the Homebrew package checksum is not correct"
+  signature="$(pkgutil --check-signature "$pkg" || true)"
+  [[ "$signature" == *"Developer ID Installer: "*"($HOMEBREW_TEAM_ID)"* ]] ||
+    die "the Homebrew package is not signed by team $HOMEBREW_TEAM_ID"
+  spctl --assess --type install "$pkg" 2>/dev/null ||
+    die "macOS does not accept the Homebrew package. It may not be notarized."
+
+  echo "Installing Homebrew. The installer asks for your password."
+  sudo installer -pkg "$pkg" -target /
+
+  load_homebrew || die "Homebrew installed, but brew is not in /opt/homebrew or /usr/local"
 }
 
 # Install the tools in the Brewfile of each package that has one.
