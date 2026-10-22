@@ -61,6 +61,8 @@ function lookup {
   fi
 }
 
+eval "$(mise activate zsh)"
+
 function dotgraph {
   label=$(lookup $1)
   depth="$2"
