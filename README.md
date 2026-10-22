@@ -16,18 +16,20 @@ For example, each location can have a .bash\_profile\_ex file which will be sour
 
 ## Usage
 
-- Install GNU stow from Homebrew
+- Clone to ~/dotfiles.
 
-        brew install stow
-    
-- Clone to ~/dotfiles, and enter the directory.
+        git clone git@github.com:brianpartridge/dotfiles.git ~/dotfiles
 
-        cd ~/dotfiles
-    
-- Symlink the .file into place with stow. 
+- Run the install script. It asks which location to link. It always links common.
 
-        stow --ignore ".DS_Store" common home-laptop 
-    
+        ~/dotfiles/install.sh
+
+    To skip the question, give the location as an argument, for example `~/dotfiles/install.sh home-laptop`. Use `none` to link only common.
+
+    The script installs stow with Homebrew if stow is not installed. If a real file in your home folder blocks a link, the script removes it only when it is the same as the copy in dotfiles. If the file is different, the script stops and shows the difference.
+
+    You can run the script again at any time.
+
 - When a change is made in one environment, push it to the remote so other environments can sync up.
 
 ## License
