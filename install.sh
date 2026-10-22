@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Install stow if needed, then link the common package and one location
+# Install stow if needed, then link the common package and one config
 # package into $HOME.
 #
-# Usage: ./install.sh [location]
+# Usage: ./install.sh <config>
 #
-# With no location, the script asks which one to use.
+# With no config, the script shows the configs and how to install one.
 
 set -euo pipefail
 
@@ -17,8 +17,8 @@ die() {
   exit 1
 }
 
-# Location packages are the top-level folders, except common.
-locations() {
+# Config packages are the top-level folders, except common.
+configs() {
   local dir
   for dir in "$DOTFILES"/*/; do
     dir="$(basename "$dir")"
@@ -26,19 +26,15 @@ locations() {
   done
 }
 
-choose_location() {
-  local options=() choice
-  while IFS= read -r choice; do options+=("$choice"); done < <(locations)
-  options+=("none")
-
-  echo "Which location do you want to link with common?" >&2
-  PS3="Location: "
-  select choice in "${options[@]}"; do
-    [[ -n "$choice" ]] && break
-    echo "Type a number from the list." >&2
-  done
-  [[ -n "${choice:-}" ]] || die "no location selected"
-  echo "$choice"
+usage() {
+  local config
+  echo "Usage: $0 <config>"
+  echo
+  echo "Links common and the config you give. Configs:"
+  while IFS= read -r config; do echo "  $config"; done < <(configs)
+  echo "  none  (link only common)"
+  echo
+  echo "Example: $0 $(configs | head -n 1)"
 }
 
 install_stow() {
@@ -91,13 +87,16 @@ remove_duplicates() {
 }
 
 main() {
-  local location="${1:-}" packages=(common)
+  local config="${1:-}" packages=(common)
 
-  [[ -n "$location" ]] || location="$(choose_location)"
-  if [[ "$location" != "none" ]]; then
-    [[ -d "$DOTFILES/$location" && "$location" != "common" ]] ||
-      die "unknown location '$location'. Use one of: $(locations | tr '\n' ' ')"
-    packages+=("$location")
+  if [[ -z "$config" ]]; then
+    usage
+    exit 1
+  fi
+  if [[ "$config" != "none" ]]; then
+    [[ -d "$DOTFILES/$config" && "$config" != "common" ]] ||
+      die "unknown config '$config'. Use one of: $(configs | tr '\n' ' ')none"
+    packages+=("$config")
   fi
 
   install_stow

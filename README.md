@@ -2,7 +2,7 @@
 
 ## Description
 
-These are my dotfiles for work and play environments.  Files are organized into directories if they are location specific.
+These are my dotfiles for work and play environments.  Files are organized into directories by config.
 
 - common: Files common to all environments.
 - work
@@ -10,9 +10,9 @@ These are my dotfiles for work and play environments.  Files are organized into 
 - home-server
 
 #### Note:
-If a specific location needs to extend a common file, consider putting the common settings into common and sourcing in the location specific settings from another file.
+If a config needs to extend a common file, consider putting the common settings into common and sourcing in the config specific settings from another file.
 
-For example, each location can have a .bash\_profile\_ex file which will be sourced in by the common .bash\_profile file if one is found.
+For example, each config can have a .bash\_profile\_ex file which will be sourced in by the common .bash\_profile file if one is found.
 
 ## Usage
 
@@ -20,11 +20,11 @@ For example, each location can have a .bash\_profile\_ex file which will be sour
 
         git clone git@github.com:brianpartridge/dotfiles.git ~/dotfiles
 
-- Run the install script. It asks which location to link. It always links common.
+- Run the install script with a config. It links common and that config.
 
-        ~/dotfiles/install.sh
+        ~/dotfiles/install.sh home-laptop
 
-    To skip the question, give the location as an argument, for example `~/dotfiles/install.sh home-laptop`. Use `none` to link only common.
+    Each top-level folder except common is a config. Use `none` to link only common. With no config, the script shows the configs and how to install one.
 
     The script installs stow with Homebrew if stow is not installed. If a real file in your home folder blocks a link, the script removes it only when it is the same as the copy in dotfiles. If the file is different, the script stops and shows the difference.
 
