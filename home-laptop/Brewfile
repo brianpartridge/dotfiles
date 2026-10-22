@@ -1,0 +1,6 @@
+brew "xcodes"
+brew "aria2" # xcodes uses it to download faster
+brew "asc"
+brew "swiftlint"
+
+cask "claude-code"
