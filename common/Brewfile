@@ -1,0 +1,9 @@
+# Tools for every config. install.sh runs `brew bundle` on this file.
+
+brew "stow"
+brew "wget"
+brew "ripgrep"
+brew "cloc"
+brew "gh"
+brew "git-lfs"
+brew "shellcheck"
