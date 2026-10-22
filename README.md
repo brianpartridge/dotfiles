@@ -30,6 +30,10 @@ For example, each location can have a .bash\_profile\_ex file which will be sour
 
     You can run the script again at any time.
 
+- To run stow yourself, run it from ~/dotfiles. The `.stowrc` file sets the target to `~` and ignores `.DS_Store` files.
+
+        cd ~/dotfiles && stow common home-laptop
+
 - When a change is made in one environment, push it to the remote so other environments can sync up.
 
 ## License
