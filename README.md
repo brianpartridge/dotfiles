@@ -36,7 +36,7 @@ For example, each config can have a .bash\_profile\_ex file which will be source
 
         cd ~/dotfiles && stow common home-laptop
 
-- To add a tool, add a line to `common/Brewfile` for all machines, or to the Brewfile of one config. The `work/Brewfile` file is a link to `home-laptop/Brewfile`. To find installed tools that are not in a Brewfile, run `brew bundle cleanup --file=<Brewfile>`. It only shows them. Add `--force` to uninstall them.
+- To add a tool, add a line to `common/Brewfile` for all machines, or to the Brewfile of one config. To find installed tools that are not in a Brewfile, run `brew bundle cleanup --file=<Brewfile>`. It only shows them. Add `--force` to uninstall them.
 
 - When a change is made in one environment, push it to the remote so other environments can sync up.
 

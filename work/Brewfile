@@ -1,1 +1,24 @@
-../home-laptop/Brewfile
+tap "cirruslabs/cli", trusted: { formulae: ["tart"] }
+tap "openai/tools", trusted: true
+
+# Xcode and Apple platforms
+brew "xcodes"
+brew "aria2" # xcodes uses it to download faster
+brew "asc"
+brew "cocoapods"
+brew "periphery"
+brew "swiftlint"
+brew "openai/tools/tart", link: false, trusted: true
+
+# Languages and runtimes
+brew "go"
+brew "mise"
+brew "node"
+brew "uv"
+
+# Other tools
+brew "actionlint"
+brew "graphviz"
+brew "poppler"
+
+cask "claude-code"
