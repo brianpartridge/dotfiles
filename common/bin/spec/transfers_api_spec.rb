@@ -28,8 +28,9 @@ describe 'transfers-api.rb (CGI)' do
       expect(body).to include('action' => 'promote', 'hash' => 'a' * 40)
       files = Dir.glob(File.join(queue, '*.json'))
       expect(files.count).to eq(1)
-      expect(JSON.parse(File.read(files.first))).to include('action' => 'promote', 'hash' => 'a' * 40, 'keep_link' => false,
-                                                            'via' => 'dashboard', 'from' => '10.0.0.2')
+      job = JSON.parse(File.read(files.first))
+      expect(job).to include('action' => 'promote', 'hash' => 'a' * 40, 'via' => 'dashboard', 'from' => '10.0.0.2')
+      expect(job).not_to have_key('keep_link') # only set when asked for
     end
   end
 
@@ -50,6 +51,35 @@ describe 'transfers-api.rb (CGI)' do
       expect(call(dir, body: JSON.generate('action' => 'promote', 'hash' => '/etc/passwd')).last['error']).to match(/40 hex/)
       expect(call(dir, body: 'x' * 5000).first).to eq(400)
       expect(Dir.glob(File.join(dir, '*'))).to be_empty
+    end
+  end
+
+  it 'accepts the remove and unlink actions with their options' do
+    with_tmpdir do |dir|
+      status, body = call(dir, body: JSON.generate('action' => 'remove_torrent', 'hash' => 'B' * 40, 'keep_library' => false))
+      expect(status).to eq(202)
+      expect(body).to include('action' => 'remove_torrent', 'hash' => 'b' * 40)
+      status, = call(dir, body: JSON.generate('action' => 'unlink_library', 'hash' => 'c' * 40))
+      expect(status).to eq(202)
+      jobs = Dir.glob(File.join(dir, '*.json')).sort.map { |f| JSON.parse(File.read(f)) }
+      expect(jobs.map { |j| j['action'] }).to contain_exactly('remove_torrent', 'unlink_library')
+      expect(jobs.find { |j| j['action'] == 'remove_torrent' }).to include('keep_library' => false)
+      expect(jobs.find { |j| j['action'] == 'unlink_library' }).not_to have_key('keep_library')
+    end
+  end
+
+  it 'accepts a library path only where the action allows it, and only inside the library' do
+    with_tmpdir do |dir|
+      env_root = '/Users/theater/Media'
+      status, body = call(dir, body: JSON.generate('action' => 'promote', 'path' => "#{env_root}/tv/X.mkv"))
+      expect(status).to eq(202)
+      expect(body).to include('path' => "#{env_root}/tv/X.mkv")
+      expect(JSON.parse(File.read(Dir.glob(File.join(dir, '*.json')).first))).to include('path' => "#{env_root}/tv/X.mkv")
+      expect(call(dir, body: JSON.generate('action' => 'unlink_library', 'path' => '/etc/passwd')).last['error']).to match(/must be under/)
+      expect(call(dir, body: JSON.generate('action' => 'unlink_library', 'path' => "#{env_root}/tv/../../x")).last['error']).to match(/must be under/)
+      # remove_torrent takes a hash only: a path falls through to hash validation
+      expect(call(dir, body: JSON.generate('action' => 'remove_torrent', 'path' => "#{env_root}/tv/X.mkv")).last['error']).to match(/40 hex/)
+      expect(Dir.glob(File.join(dir, '*.json')).count).to eq(1)
     end
   end
 
