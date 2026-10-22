@@ -1,0 +1,48 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run shellcheck on each shell script
+        run: |
+          # Find scripts by their shebang, so new scripts are checked too.
+          scripts=()
+          while IFS= read -r f; do
+            if head -n 1 "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
+              scripts+=("$f")
+            fi
+          done < <(git ls-files)
+          printf '%s\n' "${scripts[@]}"
+          shellcheck "${scripts[@]}"
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run actionlint on the workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
+  brewfiles:
+    runs-on: macos-latest
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read each Brewfile
+        run: |
+          for brewfile in */Brewfile; do
+            echo "$brewfile"
+            brew bundle list --all --file "$brewfile"
+          done
