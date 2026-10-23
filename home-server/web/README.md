@@ -142,7 +142,12 @@ The same directory can also replace the UI Transmission serves itself on port
 before its own bundle, so a symlink there makes both addresses show the
 customised copy.
 
-    ln -s ~/dotfiles/home-server/web/transmission ~/Library/Application\ Support/Transmission/web
+    ln -sfn ~/web/transmission ~/Library/Application\ Support/Transmission/web
+
+The link points at `~/web`, which stow manages, so it keeps working when the
+files move inside dotfiles. A link made with an older version of this README
+points at `~/dotfiles/common/web/transmission`, which no longer exists. Run
+the command above again to replace it.
 
 ## Upgrading the upstream copy
 
