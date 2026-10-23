@@ -49,6 +49,9 @@ jobs:
 
   ruby-specs:
     runs-on: ubuntu-latest
+    env:
+      # CI cannot clone the private gem repos, and the specs do not need them.
+      BUNDLE_WITHOUT: private
     defaults:
       run:
         working-directory: home-server/bin
