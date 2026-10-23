@@ -7,9 +7,17 @@
 source 'https://rubygems.org'
 
 # Runtime
+gem 'imdb_watchlist'
 gem 'nokogiri', '~> 1.19'
 gem 'rss'
 gem 'webrick'
+
+# Gems in private GitHub repos. Bundler clones them over SSH, so the
+# machine needs an SSH key for github.com. CI skips this group with
+# BUNDLE_WITHOUT=private.
+group :private do
+  gem 'hdbits', git: 'git@github.com:brianpartridge/HDBits.git'
+end
 
 # Tests
 gem 'rake', '~> 13.0'
