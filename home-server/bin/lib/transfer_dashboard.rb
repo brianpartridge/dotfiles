@@ -238,10 +238,24 @@ module TransferDashboard
     def promotable?(record)
       return false unless record['status'] == 'ok' && PROMOTABLE_ACTIONS.include?(record['action'])
 
+      newest_for_torrent?(record)
+    end
+
+    # A failed run of the done-script that nothing newer has replaced, so
+    # running it again may file the download. Worker records carry a job id.
+    def rerunnable?(record)
+      return false unless record['status'] == 'error' && record['job'].nil?
+
+      newest_for_torrent?(record)
+    end
+
+    # Whether nothing newer has happened to the record's torrent. Compares the
+    # whole record, not its timestamp: two records can share the same second.
+    def newest_for_torrent?(record)
       hash = (record['torrent'] || {})['hash'].to_s.downcase
       return false if hash.empty?
 
-      newest_by_hash[hash]['ts'] == record['ts']
+      newest_by_hash[hash] == record
     end
 
     def newest_by_hash
@@ -570,7 +584,7 @@ module TransferDashboard
 
         <%- unless unhandled.empty? -%>
         <h2>Complete in Transmission in the last <%= UNHANDLED_WINDOW / DAY %> days, never handled</h2>
-        <div class="notice critical">These finished downloading but no transfer record exists, so the done-script did not run or crashed before recording. Re-run it with the <code>repro</code> command from a similar record, or check <code>~/logs/torrent-finished.out</code>.</div>
+        <div class="notice critical">These finished downloading but no transfer record exists, so the done-script did not run or crashed before recording. Use <b>Re-run finish</b> to run it again, or check <code>~/logs/torrent-finished.out</code>.</div>
         <ul class="list">
           <%- unhandled.each do |t| -%>
           <li class="error">
@@ -579,6 +593,7 @@ module TransferDashboard
               <div class="name"><%= h(t['name']) %></div>
               <div class="meta">finished <%= epoch_html(t['doneDate']) %> · <%= h(TransmissionRPC.status_name(t['status'])) %> · <%= h(size_label(t['totalSize'])) %> · <%= h(t['downloadDir']) %></div>
               <%- unless t['errorString'].to_s.empty? -%><div class="msg">Transmission error: <%= h(t['errorString']) %></div><%- end -%>
+              <div class="actions"><button type="button" class="queue" data-action="rerun_finish" data-hash="<%= h(t['hashString']) %>" data-confirm="Run the done-script again for &quot;<%= h(t['name']) %>&quot;?">Re-run finish</button><span class="note"></span></div>
             </div>
           </li>
           <%- end -%>
@@ -639,7 +654,10 @@ module TransferDashboard
             <div class="meta"><%= when_html(r) %> · <b><%= h(status_label(status)) %></b> · <%= h(outcome_label(r['outcome'])) %><%- if action_label(r) && r['destination'] -%> · <%= h(action_label(r)) %> <%= h(File.dirname(r['destination'].to_s)) %><%- end -%></div>
             <div class="msg"><%= h(r['message']) %></div>
             <%- if @report.promotable?(r) -%>
-            <div class="actions"><button type="button" class="promote" data-hash="<%= h(r['torrent']['hash']) %>" data-name="<%= h(TransferDashboard.torrent_name(r)) %>">Promote to NAS</button><span class="note"></span></div>
+            <div class="actions"><button type="button" class="promote queue" data-action="promote" data-hash="<%= h(r['torrent']['hash']) %>" data-confirm="Copy &quot;<%= h(TransferDashboard.torrent_name(r)) %>&quot; to the NAS and remove it from the local library?">Promote to NAS</button><span class="note"></span></div>
+            <%- end -%>
+            <%- if @report.rerunnable?(r) -%>
+            <div class="actions"><button type="button" class="queue" data-action="rerun_finish" data-hash="<%= h(r['torrent']['hash']) %>" data-confirm="Run the done-script again for &quot;<%= h(TransferDashboard.torrent_name(r)) %>&quot;?">Re-run finish</button><span class="note"></span></div>
             <%- end -%>
             <%- if r['error'] || r['media_file'] || r['repro'] || r['file_command'] -%>
             <details>
@@ -695,13 +713,14 @@ module TransferDashboard
         navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
       });
 
-      // Promote buttons queue a job for transfers-worker.rb through the CGI at
-      // /transfers/api (see README-transfers.md, "Promoting to the NAS"). The
-      // worker runs asynchronously and regenerates this page when it is done.
+      // Promote and Re-run finish buttons queue a job for transfers-worker.rb
+      // through the CGI at /transfers/api (see README-transfers.md, "Promoting
+      // to the NAS"). The worker runs asynchronously and regenerates this page
+      // when it is done.
       document.addEventListener('click', function (event) {
-        var button = event.target.closest ? event.target.closest('button.promote') : null;
+        var button = event.target.closest ? event.target.closest('button.queue') : null;
         if (!button) { return; }
-        if (!window.confirm('Copy "' + button.getAttribute('data-name') + '" to the NAS and remove it from the local library?')) { return; }
+        if (!window.confirm(button.getAttribute('data-confirm'))) { return; }
         var note = button.parentNode.querySelector('.note');
         button.disabled = true;
         note.className = 'note';
@@ -724,7 +743,7 @@ module TransferDashboard
           button.disabled = false;
         };
         xhr.onerror = function () { note.className = 'note error'; note.textContent = 'Could not reach ' + api; button.disabled = false; };
-        xhr.send(JSON.stringify({ action: 'promote', hash: button.getAttribute('data-hash') }));
+        xhr.send(JSON.stringify({ action: button.getAttribute('data-action'), hash: button.getAttribute('data-hash') }));
       });
       </script>
       </body>

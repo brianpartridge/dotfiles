@@ -93,13 +93,15 @@ about it, and how to see what happened to recent transfers.
 
 ## Ruby
 
-Everything here runs on the macOS system Ruby (2.3), so `./bin/transfers-dashboard.rb`
-works from any shell. The exception is talking to Pushover: the system Ruby's
-OpenSSL is too old for modern TLS, so notifications need Homebrew's Ruby. The
-Transmission wrapper and the launch agent put `/usr/local/bin` first on `PATH`
-for that reason. For a manual test, call it explicitly:
+The scripts run on the rbenv Ruby named in `.ruby-version` (3.3.12), not the
+macOS system Ruby (2.3). Every script starts with `#!/usr/bin/env ruby`, and
+the Transmission wrapper, `tvrss-job.sh` and the launch agents put
+`~/.rbenv/shims` first on `PATH`. Install the gems with
+`cd ~/bin && ~/.rbenv/shims/bundle install`.
 
-    cd ~/bin && /usr/local/bin/ruby -r ./lib/notify -e 'p Notify.push("hello", title: "Transfers")'
+The exception is `web/cgi/transfers-api.rb`: Apache runs it as `_www` with
+`/usr/bin/ruby`, so it must keep working on Ruby 2.3 and use only the
+standard library.
 
 ## Why hardlinks
 
@@ -286,6 +288,23 @@ non-empty. The worker moves each request into its own folder under
 `~/logs/transfers-jobs/<time>-promote-<name>/` (`request.json`, `status.json`,
 `log.txt`), does the work, appends a record, notifies, and regenerates the
 dashboard. Old job folders can be deleted at any time.
+
+## Re-running the done-script
+
+When `torrent-finished.rb` failed for a download, or never ran, the dashboard
+shows a **Re-run finish** button on that row: on the newest record of a
+torrent when it is an error from the done-script, and on every torrent in
+"never handled". Clicking it queues a `rerun_finish` job. The worker finds the
+torrent in Transmission (or, when Transmission no longer has it, in the
+transfer log), and runs `torrent-finished.rb` with the same `TR_TORRENT_*`
+environment that Transmission sends. The script then files the download,
+appends its record and sends its notification as usual. It is safe to run
+again: existing links are replaced, and a file already in place is not copied
+again. The job log under **Jobs** holds the script's output.
+
+The same thing from a terminal:
+
+    transfers-worker.rb rerun_finish <torrent hash>
 
 ## Where to look when something is off
 

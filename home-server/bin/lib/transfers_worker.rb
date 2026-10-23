@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'logger'
+require 'open3'
+require 'rbconfig'
 require_relative 'job_queue'
 require_relative 'media_dashboard'
 require_relative 'media_remover'
@@ -8,18 +10,27 @@ require_relative 'notify'
 require_relative 'promoter'
 require_relative 'transfer_dashboard'
 require_relative 'transfer_log'
+require_relative 'transmission_rpc'
 
 # Runs queued requests (see JobQueue) and records what happened: a line in
 # the transfer log so the dashboard and the web UI show the new state, the
 # job's own status and log files, a notification, and a dashboard refresh.
 class TransfersWorker
-  ACTIONS = %w[promote remove_torrent unlink_library].freeze
+  ACTIONS = %w[promote remove_torrent unlink_library rerun_finish].freeze
+  FINISH_SCRIPT = File.expand_path('../torrent-finished.rb', __dir__)
 
-  def initialize(queue:, promoter:, remover: nil, transfer_log: TransferLog.new, logger: Logger.new($stdout),
-                 regenerate: TransfersWorker.method(:regenerate_dashboards), notify: Notify.method(:push))
+  # torrent-finished.rb failed and already recorded and announced that, so
+  # the worker records nothing more.
+  class FinishScriptFailed < StandardError; end
+
+  def initialize(queue:, promoter:, remover: nil, rpc: nil, transfer_log: TransferLog.new, logger: Logger.new($stdout),
+                 regenerate: TransfersWorker.method(:regenerate_dashboards), notify: Notify.method(:push),
+                 finisher: TransfersWorker.method(:run_finish_script))
     @queue = queue
     @promoter = promoter
     @remover = remover
+    @rpc = rpc
+    @finisher = finisher
     @transfer_log = transfer_log
     @log = logger
     @regenerate = regenerate
@@ -34,6 +45,13 @@ class TransfersWorker
     rescue StandardError => e
       warn "media page not written: #{e.class}: #{e.message}"
     end
+  end
+
+  # Runs torrent-finished.rb the way Transmission does, with the TR_TORRENT_*
+  # environment, under this Ruby. Returns [combined output, success?].
+  def self.run_finish_script(env)
+    output, status = Open3.capture2e(env, RbConfig.ruby, FINISH_SCRIPT)
+    [output, status.success?]
   end
 
   # Processes everything in the queue. Returns the jobs run.
@@ -70,17 +88,24 @@ class TransfersWorker
       job.log "FAILED: #{e.class}: #{e.message}"
       e.backtrace.first(8).each { |line| job.log "  #{line}" }
       @log.error "#{job.id}: #{e.class}: #{e.message}"
-      record_failure(action, request, e, job)
-      @notify.call("#{subject}\n#{e.class}: #{e.message}", title: "#{action.capitalize} failed", priority: :high,
-                                                                url: TransferDashboard.url, url_title: 'Open the dashboard')
+      unless e.is_a?(FinishScriptFailed)
+        record_failure(action, request, e, job)
+        @notify.call("#{subject}\n#{e.class}: #{e.message}", title: "#{action.capitalize} failed", priority: :high,
+                                                                  url: TransferDashboard.url, url_title: 'Open the dashboard')
+      end
     end
     refresh_dashboard(job)
   end
 
   # Finds the transfer record for a hash (newest first), or nil.
   def record_for(hash)
+    records_for(hash).first
+  end
+
+  # Every transfer record for a hash, newest first.
+  def records_for(hash)
     wanted = hash.to_s.downcase
-    @transfer_log.records.find { |r| (r['torrent'] || {})['hash'].to_s.downcase == wanted }
+    @transfer_log.records.select { |r| (r['torrent'] || {})['hash'].to_s.downcase == wanted }
   end
 
   private
@@ -146,8 +171,56 @@ class TransfersWorker
     message
   end
 
+  # Runs torrent-finished.rb again for a torrent, for example when the first
+  # run failed. The script records the outcome and sends the notification.
+  def do_rerun_finish(job, request)
+    torrent = finished_torrent(request['hash'], job)
+    env = { 'TR_TORRENT_NAME' => torrent['name'], 'TR_TORRENT_DIR' => torrent['directory'],
+            'TR_TORRENT_HASH' => request['hash'], 'TR_TORRENT_ID' => torrent['id'].to_s }
+    job.log "Running #{FINISH_SCRIPT} for #{File.join(torrent['directory'], torrent['name'])}"
+    before = records_for(request['hash']).count
+    output, ok = @finisher.call(env)
+    output.to_s.each_line { |line| job.log "  #{line.chomp}" }
+    recorded = records_for(request['hash']).count > before
+    unless recorded
+      # The script stopped before it recorded anything, for example on a
+      # load error, so the worker records and announces the failure.
+      tail = output.to_s.lines.last.to_s.strip
+      raise "torrent-finished.rb #{ok ? 'wrote no transfer record' : 'failed before it wrote a record'}#{tail.empty? ? '' : ": #{tail}"}"
+    end
+
+    result = record_for(request['hash'])['message']
+    raise FinishScriptFailed, "torrent-finished.rb failed: #{result}" unless ok
+
+    "Re-ran torrent-finished.rb: #{result}"
+  end
+
+  # Where the torrent's data is. Transmission knows best; the newest transfer
+  # record is the fallback when Transmission is unreachable or has removed it.
+  def finished_torrent(hash, job)
+    begin
+      found = rpc.torrents.find { |t| t['hashString'].to_s.downcase == hash }
+      if found
+        raise "#{found['name']} is still downloading (#{(found['percentDone'].to_f * 100).round}%)" if found['percentDone'].to_f < 1.0
+
+        return { 'name' => found['name'], 'directory' => found['downloadDir'], 'id' => found['id'] }
+      end
+      job.log 'Transmission does not know this torrent; using the transfer record'
+    rescue TransmissionRPC::Error => e
+      job.log "Transmission unreachable (#{e.message}); using the transfer record"
+    end
+    torrent = (record_for(hash) || {})['torrent'] || {}
+    raise "Cannot find torrent #{hash} in Transmission or the transfer log" if torrent['name'].to_s.empty? || torrent['directory'].to_s.empty?
+
+    torrent
+  end
+
+  def rpc
+    @rpc ||= TransmissionRPC.from_config
+  end
+
   def remover
-    @remover ||= MediaRemover.new(rpc: TransmissionRPC.from_config, media_root: MediaConfig::MEDIA_ROOT, logger: @log)
+    @remover ||= MediaRemover.new(rpc: rpc, media_root: MediaConfig::MEDIA_ROOT, logger: @log)
   end
 
   def promote_message(results)
