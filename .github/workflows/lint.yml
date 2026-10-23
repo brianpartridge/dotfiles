@@ -25,6 +25,20 @@ jobs:
           printf '%s\n' "${scripts[@]}"
           shellcheck "${scripts[@]}"
 
+  ruby-shebangs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that server scripts use the PATH Ruby
+        run: |
+          # /usr/bin/ruby is the macOS system Ruby 2.3.7. The scripts need the
+          # rbenv Ruby from PATH. The CGI script is the one exception, because
+          # Apache runs it as a user that cannot use rbenv.
+          if grep -l '^#!/usr/bin/ruby' home-server/bin/*.rb; then
+            echo "Use #!/usr/bin/env ruby in the files above."
+            exit 1
+          fi
+
   actionlint:
     runs-on: ubuntu-latest
     steps:

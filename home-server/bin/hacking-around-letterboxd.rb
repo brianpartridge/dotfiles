@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 # Profile
 # https://letterboxd.com/brianpartridge/
