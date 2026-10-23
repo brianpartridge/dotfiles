@@ -21,7 +21,7 @@ NO_COLOR="\[\033[0m\]"
 export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
 
 # Conditionally load host-specifc extended profile settings
-EXTENDED_PROFILE=".bashrc_ex"
+EXTENDED_PROFILE="$HOME/.bashrc_ex"
 if [ -e "$EXTENDED_PROFILE" ]; then
   source "$EXTENDED_PROFILE"
 fi
