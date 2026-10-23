@@ -7,7 +7,7 @@ These are my dotfiles for work and play environments.  Files are organized into 
 - common: Files common to all environments.
 - work
 - home-laptop
-- home-server
+- home-server: Also holds the media scripts in `bin`, the Transmission web UI in `web` and the Apache config in `conf`.
 
 #### Note:
 If a config needs to extend a common file, consider putting the common settings into common and sourcing in the config specific settings from another file.
@@ -30,7 +30,7 @@ For example, each config can have a .bash\_profile\_ex file which will be source
 
     If a real file in your home folder blocks a link, the script removes it only when it is the same as the copy in dotfiles. If the file is different, the script stops and shows the difference.
 
-    You can run the script again at any time.
+    You can run the script again at any time. It restows each package, so it also removes old links to files that moved or that you deleted.
 
 - To run stow yourself, run it from ~/dotfiles. The `.stowrc` file sets the target to `~` and ignores `.DS_Store` files and Brewfiles.
 

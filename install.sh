@@ -170,8 +170,14 @@ main() {
   install_stow
   remove_duplicates "${packages[@]}"
 
-  echo "Linking: ${packages[*]}"
-  stow --verbose "${STOW_OPTS[@]}" "${packages[@]}"
+  # Restow removes old links to files that are no longer in a package.
+  # Restow one package at a time. With several packages, stow fails when
+  # common owns a folded folder, such as ~/bin, that the config also has.
+  local pkg
+  for pkg in "${packages[@]}"; do
+    echo "Linking: $pkg"
+    stow --restow --verbose "${STOW_OPTS[@]}" "$pkg"
+  done
   echo "Done."
 }
 
