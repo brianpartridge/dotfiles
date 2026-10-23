@@ -42,7 +42,7 @@ class LetterboxdWatchlist
   def initialize(url)
     @url = url
 
-    watchlist_page = Nokogiri::HTML(open(url, {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}))
+    watchlist_page = Nokogiri::HTML(URI.open(url, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE))
     @items = watchlist_page
              .css('div.react-component')
              .map { |p| p['data-item-slug'] }
@@ -71,7 +71,7 @@ class LetterboxdWatchlist
 
     def fetch_id
       info url
-      film_page = Nokogiri::HTML(open(url, {ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE}))
+      film_page = Nokogiri::HTML(URI.open(url, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE))
       imdb_tag = film_page.css('a[data-track-action=IMDb]').first
       return if imdb_tag.nil?
       imdb_url = imdb_tag['href']
