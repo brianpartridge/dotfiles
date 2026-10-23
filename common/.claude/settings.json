@@ -1,0 +1,31 @@
+{
+  "model": "fable[1m]",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Reply in ASD-STE100 Simplified Technical English. Result first. One instruction per sentence. Max 20 words per sentence. Active voice, present tense. Approved words only. No idioms, no em-dashes, no asides.'"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "swift-lsp@claude-plugins-official": true,
+    "firebase@firebase": true
+  },
+  "extraKnownMarketplaces": {
+    "firebase": {
+      "source": {
+        "source": "github",
+        "repo": "firebase/firebase-tools"
+      }
+    }
+  },
+  "effortLevel": "xhigh",
+  "skipWorkflowUsageWarning": true,
+  "theme": "auto",
+  "agentPushNotifEnabled": true
+}
