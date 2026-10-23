@@ -25,6 +25,26 @@ jobs:
           printf '%s\n' "${scripts[@]}"
           shellcheck "${scripts[@]}"
 
+  ruby-shebangs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that server scripts use the PATH Ruby
+        run: |
+          # /usr/bin/ruby is the macOS system Ruby 2.3.7. The scripts need the
+          # rbenv Ruby from PATH. The CGI script is the one exception, because
+          # Apache runs it as a user that cannot use rbenv.
+          if grep -l '^#!/usr/bin/ruby' home-server/bin/*.rb; then
+            echo "Use #!/usr/bin/env ruby in the files above."
+            exit 1
+          fi
+      - name: Check that TLS certificate checks stay on
+        run: |
+          if grep -rn 'VERIFY_NONE' home-server --include='*.rb'; then
+            echo "Do not turn off certificate checks. Fix the server certificate instead."
+            exit 1
+          fi
+
   actionlint:
     runs-on: ubuntu-latest
     steps:
@@ -46,3 +66,20 @@ jobs:
             echo "$brewfile"
             brew bundle list --all --file "$brewfile"
           done
+
+  ruby-specs:
+    runs-on: ubuntu-latest
+    env:
+      # CI cannot clone the private gem repos, and the specs do not need them.
+      BUNDLE_WITHOUT: private
+    defaults:
+      run:
+        working-directory: home-server/bin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          working-directory: home-server/bin
+          bundler-cache: true
+      - name: Run the specs
+        run: bundle exec rspec

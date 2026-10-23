@@ -1,6 +1,12 @@
 # PATH
 export PATH=~/bin:$PATH
 
+# Ruby: put the rbenv shims first, so `ruby` runs the rbenv Ruby and not the
+# macOS system Ruby.
+if [ -x "$HOME/.rbenv/bin/rbenv" ]; then
+  eval "$("$HOME/.rbenv/bin/rbenv" init - bash)"
+fi
+
 # Important Folders
 export drobo=/Volumes/DroboFS/tdb113070198/1/Public
 export media=$drobo/media

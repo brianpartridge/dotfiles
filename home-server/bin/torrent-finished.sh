@@ -4,11 +4,12 @@
 # download completes (Transmission > Preferences > Transfers > Management).
 #
 # Transmission launches the script with a minimal environment, so this wrapper:
-#   - puts Homebrew on PATH so the right ruby and unrar are found
+#   - puts the rbenv Ruby and Homebrew on PATH, so the right ruby and unrar
+#     are found
 #   - captures all output to ~/logs/torrent-finished.out, including failures
 #     that happen before the Ruby script gets as far as its own logging
 
-export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/bin:$PATH"
+export PATH="$HOME/.rbenv/shims:/usr/local/bin:/opt/homebrew/bin:$HOME/bin:$PATH"
 
 LOG_DIR="$HOME/logs"
 OUT="$LOG_DIR/torrent-finished.out"

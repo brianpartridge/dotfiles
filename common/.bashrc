@@ -21,7 +21,7 @@ NO_COLOR="\[\033[0m\]"
 export RIPGREP_CONFIG_PATH="$HOME/.ripgreprc"
 
 # Conditionally load host-specifc extended profile settings
-EXTENDED_PROFILE=".bashrc_ex"
+EXTENDED_PROFILE="$HOME/.bashrc_ex"
 if [ -e "$EXTENDED_PROFILE" ]; then
   source "$EXTENDED_PROFILE"
 fi
@@ -87,7 +87,6 @@ if [ `uname`=="Darwin" ]; then
 fi
 
 
-export PATH="$PATH:$HOME/.rvm/bin" # Add RVM to PATH for scripting
 export PATH="$PATH:$HOME/bin"      # Add local bin dir to path
 
 alias reload-tvrss="launchctl unload ~/Library/LaunchAgents/com.multipleentendre.tvrss.plist && launchctl load ~/Library/LaunchAgents/com.multipleentendre.tvrss.plist"
