@@ -32,7 +32,7 @@ files). `transmission/LICENSE` is upstream's GPL v2.
    `sudo launchctl load -w /System/Library/LaunchDaemons/org.apache.httpd.plist`
    to survive reboots; the transfers dashboard setup does the same).
 
-       sudo cp ~/dotfiles/common/conf/apache/transmission.conf /etc/apache2/other/
+       sudo cp ~/dotfiles/home-server/conf/apache/transmission.conf /etc/apache2/other/
        sudo apachectl configtest
        sudo apachectl graceful
 
@@ -42,7 +42,7 @@ files). `transmission/LICENSE` is upstream's GPL v2.
 
 ## Day to day
 
-Edit files under `common/web/transmission/` (or pull), then deploy. Apache
+Edit files under `home-server/web/transmission/` (or pull), then deploy. Apache
 serves the deployed copy, not the checkout, so a pull alone changes nothing:
 
     ~/bin/transmission-web-deploy.sh
@@ -71,8 +71,8 @@ the second means nothing has been deployed yet.
 A dev server serves this checkout the way Apache does, so edits show up on
 reload without deploying. It runs on the system Ruby with no gems:
 
-    ruby ~/dotfiles/common/web/tools/devserver.rb            # http://localhost:8080/transmission/
-    ruby ~/dotfiles/common/web/tools/devserver.rb --mock     # no Transmission needed: sample torrents and transfers
+    ruby ~/dotfiles/home-server/web/tools/devserver.rb            # http://localhost:8080/transmission/
+    ruby ~/dotfiles/home-server/web/tools/devserver.rb --mock     # no Transmission needed: sample torrents and transfers
 
 Without `--mock` it proxies the RPC to `localhost:9091` (`--rpc URL` to point
 elsewhere, for example at the server from a laptop) and serves the transfers
@@ -142,7 +142,7 @@ The same directory can also replace the UI Transmission serves itself on port
 before its own bundle, so a symlink there makes both addresses show the
 customised copy.
 
-    ln -s ~/dotfiles/common/web/transmission ~/Library/Application\ Support/Transmission/web
+    ln -s ~/dotfiles/home-server/web/transmission ~/Library/Application\ Support/Transmission/web
 
 ## Upgrading the upstream copy
 
@@ -150,8 +150,8 @@ If Transmission is ever upgraded, bring in the matching `web/` tree so the UI
 and the daemon agree, then re-apply local changes from the diff:
 
     git clone --depth 1 --branch <tag> https://github.com/transmission/transmission /tmp/tr
-    rm -rf ~/dotfiles/common/web/transmission && cp -R /tmp/tr/web ~/dotfiles/common/web/transmission
-    find ~/dotfiles/common/web/transmission -name Makefile.am -delete
+    rm -rf ~/dotfiles/home-server/web/transmission && cp -R /tmp/tr/web ~/dotfiles/home-server/web/transmission
+    find ~/dotfiles/home-server/web/transmission -name Makefile.am -delete
     # update transmission/UPSTREAM, then `git diff` shows upstream's changes against yours
 
 ## Exposure

@@ -340,7 +340,7 @@ module TransferDashboard
   end
 
   # The latest record per torrent, keyed by hash and by name, for the
-  # Transmission web UI's per-row indicator (common/web/transmission/javascript/extras/transfers.js).
+  # Transmission web UI's per-row indicator (home-server/web/transmission/javascript/extras/transfers.js).
   def summary(report)
     by_hash = {}
     by_name = {}

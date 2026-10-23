@@ -16,9 +16,9 @@
 #
 # Runs on the macOS system Ruby (2.3) with no gems: WEBrick is in its stdlib.
 #
-#   ruby common/web/tools/devserver.rb            # then open http://localhost:8080/transmission/
-#   ruby common/web/tools/devserver.rb --mock
-#   ruby common/web/tools/devserver.rb --rpc http://theater-mac.local:9091/transmission/rpc
+#   ruby home-server/web/tools/devserver.rb            # then open http://localhost:8080/transmission/
+#   ruby home-server/web/tools/devserver.rb --mock
+#   ruby home-server/web/tools/devserver.rb --rpc http://theater-mac.local:9091/transmission/rpc
 
 require 'json'
 require 'net/http'
