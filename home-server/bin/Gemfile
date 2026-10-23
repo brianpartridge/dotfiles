@@ -1,12 +1,24 @@
 # frozen_string_literal: true
 
+# The server runs the scripts with the rbenv Ruby in .ruby-version and the
+# gems installed in it. The scripts do not load Bundler, so install these
+# gems on the server with `bundle install`.
+
 source 'https://rubygems.org'
 
+# Runtime
 gem 'imdb_watchlist'
-gem 'jaro_winkler'
-gem 'nokogiri', '~> 1.10'
-gem 'pry'
-gem 'rake', '~> 12.3'
-gem 'rspec', '~> 3.0'
-gem 'rubocop', '>= 0.24'
-gem 'webmock', '~> 1.21.0'
+gem 'nokogiri', '~> 1.19'
+gem 'rss'
+gem 'webrick'
+
+# Gems in private GitHub repos. Bundler clones them over SSH, so the
+# machine needs an SSH key for github.com. CI skips this group with
+# BUNDLE_WITHOUT=private.
+group :private do
+  gem 'hdbits', git: 'git@github.com:brianpartridge/HDBits.git'
+end
+
+# Tests
+gem 'rake', '~> 13.0'
+gem 'rspec', '~> 3.13'
