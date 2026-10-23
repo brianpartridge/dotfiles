@@ -273,10 +273,12 @@ describe TransferDashboard do
     end
 
     it 'can be overridden' do
-      ENV['TRANSFER_DASHBOARD_URL'] = 'http://example.test/x/'
-      expect(TransferDashboard.url).to eq('http://example.test/x/')
-    ensure
-      ENV.delete('TRANSFER_DASHBOARD_URL')
+      begin
+        ENV['TRANSFER_DASHBOARD_URL'] = 'http://example.test/x/'
+        expect(TransferDashboard.url).to eq('http://example.test/x/')
+      ensure
+        ENV.delete('TRANSFER_DASHBOARD_URL')
+      end
     end
   end
 

@@ -5,20 +5,23 @@ require 'notify'
 require_relative 'spec_helper_transfers'
 
 describe Notify do
+  # Ruby 2.3 does not allow ensure directly in a do block, so use begin.
   around do |example|
-    with_tmpdir do |dir|
-      @conf = File.join(dir, 'pushover.json')
-      Notify.config_path = @conf
-      @sent = []
-      Notify.transport = lambda { |params|
-        @sent << params
-        FakeResponse.new('200', '{"status":1}')
-      }
-      example.run
+    begin
+      with_tmpdir do |dir|
+        @conf = File.join(dir, 'pushover.json')
+        Notify.config_path = @conf
+        @sent = []
+        Notify.transport = lambda { |params|
+          @sent << params
+          FakeResponse.new('200', '{"status":1}')
+        }
+        example.run
+      end
+    ensure
+      Notify.config_path = nil
+      Notify.transport = nil
     end
-  ensure
-    Notify.config_path = nil
-    Notify.transport = nil
   end
 
   it 'is unconfigured without a config file' do
