@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rspec'
+require 'json'
 require 'open3'
 require_relative 'spec_helper_transfers'
 
