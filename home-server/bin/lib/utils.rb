@@ -2,7 +2,6 @@
 
 require 'json'
 require 'open-uri'
-require 'openssl'
 
 $conf_dir = '~/Dropbox/conf/'
 
@@ -32,7 +31,7 @@ def download(url, display_name, outdir, filename)
   path = File.expand_path(outdir + filename)
   info "Downloading '#{display_name}' to '#{path}' from '#{url}'"
   open(path, 'wb') do |f|
-    f << URI.open(url, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE).read
+    f << URI.open(url).read
     success "Downloaded '#{display_name}' to '#{path}'"
   end
 end

@@ -3,6 +3,7 @@
 require 'feed_cache'
 require 'rspec'
 require 'webrick'
+require 'webrick/https'
 
 describe 'FeedCache' do
   RSS_BODY = <<~XML
@@ -62,6 +63,26 @@ describe 'FeedCache' do
   it 'attaches passkey' do
     expect { cache.items_for_feed('tv') }.to output.to_stdout
     expect(@requests.first).to eq('id=7&passkey=secret')
+  end
+
+  it 'refuses a server whose certificate it cannot verify' do
+    started = Queue.new
+    https = WEBrick::HTTPServer.new(Port: 0, BindAddress: '127.0.0.1', StartCallback: -> { started << true },
+                                    SSLEnable: true, SSLCertName: [%w[CN localhost]],
+                                    Logger: WEBrick::Log.new(File::NULL), AccessLog: [])
+    https.mount_proc('/feed') { |_, res| res.body = RSS_BODY }
+    thread = Thread.new { https.start }
+    started.pop
+    begin
+      c = FeedCache.new([{ 'name' => 'tv', 'url' => "https://localhost:#{https.config[:Port]}/feed?id=7", 'passkey_file' => 'x' }])
+      allow(c).to receive(:first_line_from_file).and_return('secret')
+      expect do
+        expect { c.items_for_feed('tv') }.to raise_error(SystemExit)
+      end.to output(/certificate verify failed/).to_stdout
+    ensure
+      https.shutdown
+      thread.join
+    end
   end
 
   it 'returns no items for an unknown feed' do
