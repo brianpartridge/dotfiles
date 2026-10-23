@@ -168,6 +168,19 @@ describe TransferDashboard do
       end
     end
 
+    it 'treats only the newest of two records in the same second as current' do
+      same = now.iso8601
+      recs = [
+        { 'ts' => same, 'status' => 'ok', 'outcome' => 'tv', 'action' => 'link', 'message' => 'Linked on re-run',
+          'destination' => '/m/tv/a.mkv', 'torrent' => { 'name' => 'Show', 'hash' => 'a' * 40 } },
+        { 'ts' => same, 'status' => 'error', 'outcome' => 'error', 'message' => 'NoMethodError',
+          'torrent' => { 'name' => 'Show', 'hash' => 'a' * 40 } }
+      ]
+      r = build(records: recs)
+      expect(r.rerunnable?(recs[1])).to be false
+      expect(r.promotable?(recs[0])).to be true
+    end
+
     it 'offers Re-run finish on the newest failed done-script record and on unhandled torrents' do
       with_tmpdir do |dir|
         out = File.join(dir, 'index.html')

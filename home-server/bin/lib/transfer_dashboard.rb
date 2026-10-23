@@ -238,10 +238,7 @@ module TransferDashboard
     def promotable?(record)
       return false unless record['status'] == 'ok' && PROMOTABLE_ACTIONS.include?(record['action'])
 
-      hash = (record['torrent'] || {})['hash'].to_s.downcase
-      return false if hash.empty?
-
-      newest_by_hash[hash]['ts'] == record['ts']
+      newest_for_torrent?(record)
     end
 
     # A failed run of the done-script that nothing newer has replaced, so
@@ -249,10 +246,16 @@ module TransferDashboard
     def rerunnable?(record)
       return false unless record['status'] == 'error' && record['job'].nil?
 
+      newest_for_torrent?(record)
+    end
+
+    # Whether nothing newer has happened to the record's torrent. Compares the
+    # whole record, not its timestamp: two records can share the same second.
+    def newest_for_torrent?(record)
       hash = (record['torrent'] || {})['hash'].to_s.downcase
       return false if hash.empty?
 
-      newest_by_hash[hash]['ts'] == record['ts']
+      newest_by_hash[hash] == record
     end
 
     def newest_by_hash

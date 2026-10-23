@@ -230,7 +230,10 @@ describe TransfersWorker do
     it 'uses the transfer record when Transmission no longer has the torrent, or is unreachable' do
       [{ torrents: [] }, { rpc_error: 'connection refused' }].each do |transmission|
         with_tmpdir do |dir|
-          w = rerun_worker(dir, **transmission) { |_env| ['', true] }
+          w = rerun_worker(dir, **transmission) do |_env|
+            finish_record('ok', 'Linked')
+            ['', true]
+          end
           finish_record('error', 'NoMethodError')
           @queue.enqueue('rerun_finish', 'hash' => HASH)
 
@@ -255,6 +258,21 @@ describe TransfersWorker do
                                       'message' => 'TransfersWorker::FinishScriptFailed: torrent-finished.rb failed: Destination directory is missing')
         expect(@log.records.count).to eq(1)
         expect(@pushes).to be_empty
+      end
+    end
+
+    it 'records and announces the failure itself when the done-script stops before recording' do
+      [[false, 'failed before it wrote a record'], [true, 'wrote no transfer record']].each do |ok, words|
+        with_tmpdir do |dir|
+          w = rerun_worker(dir, torrents: [complete_torrent]) { |_env| ["boot\ncannot load such file -- logger\n", ok] }
+          @queue.enqueue('rerun_finish', 'hash' => HASH)
+
+          job = w.process!.first
+          expect(job.status).to include('state' => 'failed',
+                                        'message' => "RuntimeError: torrent-finished.rb #{words}: cannot load such file -- logger")
+          expect(@log.records.map { |r| [r['status'], r['action']] }).to eq([%w[error rerun_finish]])
+          expect(@pushes.map { |p| p.last[:title] }).to eq(['Rerun_finish failed'])
+        end
       end
     end
 

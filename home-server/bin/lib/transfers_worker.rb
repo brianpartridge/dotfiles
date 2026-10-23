@@ -99,8 +99,13 @@ class TransfersWorker
 
   # Finds the transfer record for a hash (newest first), or nil.
   def record_for(hash)
+    records_for(hash).first
+  end
+
+  # Every transfer record for a hash, newest first.
+  def records_for(hash)
     wanted = hash.to_s.downcase
-    @transfer_log.records.find { |r| (r['torrent'] || {})['hash'].to_s.downcase == wanted }
+    @transfer_log.records.select { |r| (r['torrent'] || {})['hash'].to_s.downcase == wanted }
   end
 
   private
@@ -173,10 +178,18 @@ class TransfersWorker
     env = { 'TR_TORRENT_NAME' => torrent['name'], 'TR_TORRENT_DIR' => torrent['directory'],
             'TR_TORRENT_HASH' => request['hash'], 'TR_TORRENT_ID' => torrent['id'].to_s }
     job.log "Running #{FINISH_SCRIPT} for #{File.join(torrent['directory'], torrent['name'])}"
+    before = records_for(request['hash']).count
     output, ok = @finisher.call(env)
     output.to_s.each_line { |line| job.log "  #{line.chomp}" }
-    record = record_for(request['hash'])
-    result = record ? record['message'] : 'no transfer record written'
+    recorded = records_for(request['hash']).count > before
+    unless recorded
+      # The script stopped before it recorded anything, for example on a
+      # load error, so the worker records and announces the failure.
+      tail = output.to_s.lines.last.to_s.strip
+      raise "torrent-finished.rb #{ok ? 'wrote no transfer record' : 'failed before it wrote a record'}#{tail.empty? ? '' : ": #{tail}"}"
+    end
+
+    result = record_for(request['hash'])['message']
     raise FinishScriptFailed, "torrent-finished.rb failed: #{result}" unless ok
 
     "Re-ran torrent-finished.rb: #{result}"
