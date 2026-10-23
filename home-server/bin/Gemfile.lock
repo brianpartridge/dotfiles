@@ -8,7 +8,8 @@ GEM
   remote: https://rubygems.org/
   specs:
     diff-lcs (1.6.2)
-    imdb_watchlist (0.0.1)
+    imdb_watchlist (0.0.2)
+      rss
     nokogiri (1.19.4-arm64-darwin)
       racc (~> 1.4)
     nokogiri (1.19.4-x86_64-darwin)
@@ -43,7 +44,7 @@ PLATFORMS
 
 DEPENDENCIES
   hdbits!
-  imdb_watchlist
+  imdb_watchlist (>= 0.0.2)
   nokogiri (~> 1.19)
   rake (~> 13.0)
   rspec (~> 3.13)
@@ -54,7 +55,7 @@ CHECKSUMS
   bundler (4.0.23) sha256=407ba8a1d928f412847f819aa5f8b6aef7c59fb51feb517112af8a165487287b
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   hdbits (0.0.4)
-  imdb_watchlist (0.0.1) sha256=a2488c96a8787cdfcda686831472b9c6305f10f7e31b3891f24d7bc244dde7e2
+  imdb_watchlist (0.0.2) sha256=d6a5b02935c837aa2977840d96ec3c0387e359314f5b5f8abca46b17acfbf554
   nokogiri (1.19.4-arm64-darwin) sha256=a46db9853286e6597b36ebc6953817d15acf3a299583eb3f89fdc6f91dd63527
   nokogiri (1.19.4-x86_64-darwin) sha256=7fd17057d3e1f00e9954a74b3cd76595d3d4a5ef233b7ed9599047c204f70551
   nokogiri (1.19.4-x86_64-linux-gnu) sha256=379fae440b28915e3f19d752ce2dcf8465ed2b2fbefd2a7ca0dd497bc981a06a

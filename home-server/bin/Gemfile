@@ -7,7 +7,7 @@
 source 'https://rubygems.org'
 
 # Runtime
-gem 'imdb_watchlist'
+gem 'imdb_watchlist', '>= 0.0.2' # 0.0.2 works on Ruby 3
 gem 'nokogiri', '~> 1.19'
 gem 'rss'
 gem 'webrick'
