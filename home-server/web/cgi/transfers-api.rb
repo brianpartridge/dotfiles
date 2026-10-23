@@ -3,7 +3,7 @@
 #
 # The dashboard's one write endpoint: queues a job for transfers-worker.rb.
 # Deployed by transmission-web-deploy.sh to /Library/WebServer/CGI-Executables
-# and reached as /transfers/api (see common/conf/apache/transmission.conf).
+# and reached as /transfers/api (see home-server/conf/apache/transmission.conf).
 #
 # Runs as Apache's _www user with the system Ruby, so it is self-contained:
 # it validates the request and writes one small JSON file into the queue

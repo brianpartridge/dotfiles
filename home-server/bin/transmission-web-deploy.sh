@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Deploys the Transmission web UI kept in common/web/transmission to the
-# Mac's Apache document root, where common/conf/apache/transmission.conf
-# expects it. Run after changing the UI. See common/web/README.md.
+# Deploys the Transmission web UI kept in home-server/web/transmission to the
+# Mac's Apache document root, where home-server/conf/apache/transmission.conf
+# expects it. Run after changing the UI. See home-server/web/README.md.
 #
 # Usage: transmission-web-deploy.sh
 #   TRANSMISSION_WEB_DEST overrides the destination
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Resolve this script's real location (stow symlinks ~/bin here), then go up
-# to common/. macOS has no readlink -f, so follow links by hand.
+# to home-server/. macOS has no readlink -f, so follow links by hand.
 self="$0"
 while [ -L "$self" ]; do
   target="$(readlink "$self")"
@@ -20,8 +20,8 @@ while [ -L "$self" ]; do
     *) self="$(dirname "$self")/$target" ;;
   esac
 done
-COMMON="$(cd -P "$(dirname "$self")/.." && pwd -P)"
-SRC="$COMMON/web/transmission"
+PACKAGE="$(cd -P "$(dirname "$self")/.." && pwd -P)"
+SRC="$PACKAGE/web/transmission"
 DEST="${TRANSMISSION_WEB_DEST:-/Library/WebServer/Documents/transmission/web}"
 PARENT="$(dirname "$DEST")"
 
@@ -42,8 +42,8 @@ mkdir -p "$DEST.new"
 cp -R "$SRC/." "$DEST.new/"
 {
   echo "Deployed $(date '+%Y-%m-%d %H:%M:%S')"
-  git -C "$COMMON" log -1 --format='From commit %h (%s)' -- web/transmission 2>/dev/null || true
-  if git -C "$COMMON" status --porcelain -- web/transmission 2>/dev/null | grep -q .; then
+  git -C "$PACKAGE" log -1 --format='From commit %h (%s)' -- web/transmission 2>/dev/null || true
+  if git -C "$PACKAGE" status --porcelain -- web/transmission 2>/dev/null | grep -q .; then
     echo "With uncommitted local changes"
   fi
 } > "$DEST.new/DEPLOYED"
@@ -55,7 +55,7 @@ count="$(find "$DEST" -type f | wc -l | tr -d ' ')"
 echo "Deployed $count files to $DEST"
 
 # The dashboard's CGI endpoint goes to Apache's stock CGI directory.
-CGI_SRC="$COMMON/web/cgi/transfers-api.rb"
+CGI_SRC="$PACKAGE/web/cgi/transfers-api.rb"
 CGI_DIR="${TRANSFERS_CGI_DIR:-/Library/WebServer/CGI-Executables}"
 if [ -w "$CGI_DIR" ]; then
   cp "$CGI_SRC" "$CGI_DIR/transfers-api.rb.new" && chmod 755 "$CGI_DIR/transfers-api.rb.new" && mv -f "$CGI_DIR/transfers-api.rb.new" "$CGI_DIR/transfers-api.rb"

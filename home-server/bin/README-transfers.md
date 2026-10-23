@@ -83,7 +83,7 @@ about it, and how to see what happened to recent transfers.
        mkdir -p ~/logs/transfers-queue && chmod 1777 ~/logs/transfers-queue
        sudo chown $USER /Library/WebServer/CGI-Executables   # so the deploy script can update the CGI
        transmission-web-deploy.sh                              # copies ../web/cgi/transfers-api.rb there
-       sudo cp ~/dotfiles/common/conf/apache/transmission.conf /etc/apache2/other/ && sudo apachectl graceful
+       sudo cp ~/dotfiles/home-server/conf/apache/transmission.conf /etc/apache2/other/ && sudo apachectl graceful
        launchctl load ~/Library/LaunchAgents/com.brianpartridge.transfers-worker.plist
 
    Check: `curl -si -X POST http://localhost/transfers/api` should answer
@@ -312,7 +312,7 @@ Logs:
 - `~/logs/transfers.jsonl`: one JSON object per run; the dashboard's source of truth.
 - `~/logs/transfers-worker.out` and `~/logs/transfers-jobs/*/log.txt`: the dashboard-triggered jobs.
 - `transfers.json` next to the dashboard page: the latest record per torrent, read by the
-  Transmission web UI's transfers indicator (see `common/web/README.md`).
+  Transmission web UI's transfers indicator (see `home-server/web/README.md`).
 
 ## Record format
 
