@@ -56,7 +56,7 @@ def rss_url(internal_only)
 end
 
 def load_available_wishlist_items(internal_only = true)
-  RSS::Parser.parse(URI.open(rss_url(internal_only), ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE).read).items
+  RSS::Parser.parse(URI.open(rss_url(internal_only)).read).items
 end
 
 # Only download items that are 720p, and remove duplicates to only download unique items.
@@ -68,7 +68,7 @@ def download_item(item)
   info "Downloading #{item.title}"
   tweet "START:Download - #{item.title}"
   open(dl_item_path(item), 'wb') do |f|
-    f << URI.open(item.link, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE).read
+    f << URI.open(item.link).read
   end
 end
 

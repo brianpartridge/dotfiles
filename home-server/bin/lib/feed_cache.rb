@@ -24,7 +24,7 @@ class FeedCache
       url = authenticated_url(feed_dict['url'], feed_dict['passkey_file'])
       feed = nil
       begin
-        fd = URI.open(url, ssl_verify_mode: OpenSSL::SSL::VERIFY_NONE)
+        fd = URI.open(url)
         data = fd.read
         feed = RSS::Parser.parse(data)
       rescue Exception => e
