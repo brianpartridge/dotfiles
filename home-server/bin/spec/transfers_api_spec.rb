@@ -69,6 +69,17 @@ describe 'transfers-api.rb (CGI)' do
     end
   end
 
+  it 'accepts rerun_finish with a hash only' do
+    with_tmpdir do |dir|
+      status, body = call(dir, body: JSON.generate('action' => 'rerun_finish', 'hash' => 'D' * 40))
+      expect(status).to eq(202)
+      expect(body).to include('action' => 'rerun_finish', 'hash' => 'd' * 40)
+      expect(JSON.parse(File.read(Dir.glob(File.join(dir, '*.json')).first))).to include('action' => 'rerun_finish', 'hash' => 'd' * 40)
+      expect(call(dir, body: JSON.generate('action' => 'rerun_finish', 'path' => '/Users/theater/Media/tv/X.mkv')).last['error']).to match(/40 hex/)
+      expect(Dir.glob(File.join(dir, '*.json')).count).to eq(1)
+    end
+  end
+
   it 'accepts a library path only where the action allows it, and only inside the library' do
     with_tmpdir do |dir|
       env_root = '/Users/theater/Media'

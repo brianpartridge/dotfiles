@@ -174,4 +174,105 @@ describe TransfersWorker do
       expect(job.log_tail).to include('Dashboard refresh failed: RuntimeError: no apache')
     end
   end
+
+  describe 'rerun_finish' do
+    def rerun_worker(dir, torrents: [], rpc_error: nil, &finisher)
+      @queue = JobQueue.new(queue_dir: File.join(dir, 'queue'), jobs_dir: File.join(dir, 'jobs'))
+      @log = TransferLog.new(File.join(dir, 'transfers.jsonl'))
+      @pushes = []
+      @refreshes = 0
+      @envs = []
+      rpc = instance_double(TransmissionRPC)
+      if rpc_error
+        allow(rpc).to receive(:torrents).and_raise(TransmissionRPC::Error, rpc_error)
+      else
+        allow(rpc).to receive(:torrents).and_return(torrents)
+      end
+      promoter = Promoter.new(nas_root: File.join(dir, 'nas'), media_root: File.join(dir, 'Media'), logger: null_logger)
+      TransfersWorker.new(queue: @queue, promoter: promoter, rpc: rpc, transfer_log: @log, logger: null_logger,
+                          regenerate: -> { @refreshes += 1 },
+                          notify: ->(message, **opts) { @pushes << [message, opts] },
+                          finisher: lambda { |env|
+                            @envs << env
+                            finisher.call(env)
+                          })
+    end
+
+    def complete_torrent(percent: 1.0)
+      { 'id' => 7, 'name' => 'Show.S01E01', 'hashString' => HASH, 'downloadDir' => '/dl/complete', 'percentDone' => percent }
+    end
+
+    # What torrent-finished.rb writes to the transfer log.
+    def finish_record(status, message)
+      @log.append('status' => status, 'outcome' => status == 'ok' ? 'tv' : 'error', 'action' => 'link', 'message' => message,
+                  'torrent' => { 'name' => 'Show.S01E01', 'hash' => HASH, 'directory' => '/dl/complete' })
+    end
+
+    it 'runs the done-script with the Transmission environment and reports its outcome' do
+      with_tmpdir do |dir|
+        w = rerun_worker(dir, torrents: [complete_torrent]) do |_env|
+          finish_record('ok', 'Linked Show.S01E01.mkv')
+          ["STARTING\nFINISHED: ok\n", true]
+        end
+        @queue.enqueue('rerun_finish', 'hash' => HASH.upcase)
+
+        job = w.process!.first
+        expect(@envs).to eq([{ 'TR_TORRENT_NAME' => 'Show.S01E01', 'TR_TORRENT_DIR' => '/dl/complete',
+                               'TR_TORRENT_HASH' => HASH, 'TR_TORRENT_ID' => '7' }])
+        expect(job.status).to include('state' => 'done', 'message' => 'Re-ran torrent-finished.rb: Linked Show.S01E01.mkv')
+        expect(job.log_tail).to include('FINISHED: ok')
+        expect(@log.records.count).to eq(1) # the script's own record only
+        expect(@pushes).to be_empty # the script sends its own notification
+        expect(@refreshes).to eq(1)
+      end
+    end
+
+    it 'uses the transfer record when Transmission no longer has the torrent, or is unreachable' do
+      [{ torrents: [] }, { rpc_error: 'connection refused' }].each do |transmission|
+        with_tmpdir do |dir|
+          w = rerun_worker(dir, **transmission) { |_env| ['', true] }
+          finish_record('error', 'NoMethodError')
+          @queue.enqueue('rerun_finish', 'hash' => HASH)
+
+          job = w.process!.first
+          expect(job.status).to include('state' => 'done')
+          expect(@envs.first).to include('TR_TORRENT_NAME' => 'Show.S01E01', 'TR_TORRENT_DIR' => '/dl/complete', 'TR_TORRENT_ID' => '')
+          expect(job.log_tail).to match(/does not know this torrent|unreachable/)
+        end
+      end
+    end
+
+    it 'leaves the failure record and notification to the done-script when it fails again' do
+      with_tmpdir do |dir|
+        w = rerun_worker(dir, torrents: [complete_torrent]) do |_env|
+          finish_record('error', 'Destination directory is missing')
+          ['ERROR', false]
+        end
+        @queue.enqueue('rerun_finish', 'hash' => HASH)
+
+        job = w.process!.first
+        expect(job.status).to include('state' => 'failed',
+                                      'message' => 'TransfersWorker::FinishScriptFailed: torrent-finished.rb failed: Destination directory is missing')
+        expect(@log.records.count).to eq(1)
+        expect(@pushes).to be_empty
+      end
+    end
+
+    it 'refuses a torrent that is still downloading or that it cannot find' do
+      with_tmpdir do |dir|
+        w = rerun_worker(dir, torrents: [complete_torrent(percent: 0.4)]) { |_env| raise 'must not run' }
+        @queue.enqueue('rerun_finish', 'hash' => HASH)
+        @queue.enqueue('rerun_finish', 'hash' => 'e' * 40)
+
+        jobs = w.process!
+        expect(jobs.map { |j| j.status['message'] }).to contain_exactly(
+          'RuntimeError: Show.S01E01 is still downloading (40%)',
+          "RuntimeError: Cannot find torrent #{'e' * 40} in Transmission or the transfer log"
+        )
+        expect(@envs).to be_empty
+        expect(@log.records.map { |r| r['action'] }).to eq(%w[rerun_finish rerun_finish])
+        expect(@pushes.map { |p| p.last[:title] }).to eq(['Rerun_finish failed', 'Rerun_finish failed'])
+      end
+    end
+  end
 end

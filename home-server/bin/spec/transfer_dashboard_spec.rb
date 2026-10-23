@@ -162,9 +162,35 @@ describe TransferDashboard do
         expect(r.promotable?(recs[4])).to be false
         TransferDashboard.generate(report: r, output: out, quiet: true)
         html = File.read(out, encoding: 'UTF-8')
-        expect(html.scan('class="promote"').count).to eq(1)
-        expect(html).to include(%(data-hash="#{'B' * 40}" data-name="Film &lt;1&gt;">Promote to NAS</button>))
-        expect(html).to include('promoted to /nas/tv', "'X-Requested-With', 'transfers'", "action: 'promote'")
+        expect(html.scan('class="promote queue"').count).to eq(1)
+        expect(html).to include(%(data-action="promote" data-hash="#{'B' * 40}" data-confirm="Copy &quot;Film &lt;1&gt;&quot; to the NAS))
+        expect(html).to include('promoted to /nas/tv', "'X-Requested-With', 'transfers'", "action: button.getAttribute('data-action')")
+      end
+    end
+
+    it 'offers Re-run finish on the newest failed done-script record and on unhandled torrents' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        recs = [
+          { 'ts' => now.iso8601, 'status' => 'error', 'outcome' => 'error', 'message' => 'NoMethodError',
+            'torrent' => { 'name' => 'Failed.Show', 'hash' => 'a' * 40, 'directory' => '/dl' } },
+          { 'ts' => (now - 60).iso8601, 'status' => 'error', 'outcome' => 'error', 'message' => 'older failure',
+            'torrent' => { 'name' => 'Failed.Show', 'hash' => 'a' * 40, 'directory' => '/dl' } },
+          { 'ts' => (now - 120).iso8601, 'status' => 'ok', 'outcome' => 'tv', 'action' => 'link', 'message' => 'Linked',
+            'destination' => '/m/tv/b.mkv', 'torrent' => { 'name' => 'Fine', 'hash' => 'b' * 40 } },
+          { 'ts' => (now - 180).iso8601, 'status' => 'error', 'outcome' => 'tv', 'action' => 'promote', 'job' => 'job-1',
+            'message' => 'Promote failed', 'torrent' => { 'name' => 'Worker.Failure', 'hash' => 'c' * 40 } },
+          { 'ts' => (now - 240).iso8601, 'status' => 'error', 'outcome' => 'no_torrent', 'message' => 'No torrent in environment' }
+        ]
+        never = { 'name' => 'Never.Handled', 'hashString' => 'd' * 40, 'percentDone' => 1.0, 'doneDate' => (now - 3600).to_i,
+                  'status' => 6, 'totalSize' => 1, 'downloadDir' => '/dl' }
+        r = build(records: recs, torrents: [never])
+        expect(recs.map { |rec| r.rerunnable?(rec) }).to eq([true, false, false, false, false])
+        TransferDashboard.generate(report: r, output: out, quiet: true)
+        html = File.read(out, encoding: 'UTF-8')
+        expect(html.scan('data-action="rerun_finish"').count).to eq(2)
+        expect(html).to include(%(data-action="rerun_finish" data-hash="#{'a' * 40}" data-confirm="Run the done-script again for &quot;Failed.Show&quot;?">Re-run finish</button>))
+        expect(html).to include(%(data-action="rerun_finish" data-hash="#{'d' * 40}"))
       end
     end
 
