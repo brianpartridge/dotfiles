@@ -1,7 +1,23 @@
 #!/bin/sh
-cd "$(git rev-parse --show-toplevel)" || exit 1
-branch=master
-if [ -f .git/refs/heads/main ]; then
-    branch=main
+# Print the name of the repository's main branch, for example "main" or
+# "master". Ask git, not the .git folder: git can keep branches in
+# .git/packed-refs, and in a worktree .git is a file.
+
+git rev-parse --git-dir >/dev/null || exit 1
+
+# The remote's default branch, when git knows it (set by clone, or by
+# `git remote set-head origin --auto`).
+if head=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null); then
+    printf '%s' "${head#origin/}"
+    exit 0
 fi
-printf '%s' "$branch"
+
+for branch in main master; do
+    if git show-ref --verify --quiet "refs/heads/$branch" ||
+        git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        printf '%s' "$branch"
+        exit 0
+    fi
+done
+
+printf '%s' master
