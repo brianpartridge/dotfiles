@@ -80,6 +80,17 @@ describe 'transfers-api.rb (CGI)' do
     end
   end
 
+  it 'accepts refresh with no subject, and ignores a hash or path' do
+    with_tmpdir do |dir|
+      status, body = call(dir, body: JSON.generate('action' => 'refresh', 'hash' => 'x', 'path' => '/etc/passwd'))
+      expect(status).to eq(202)
+      expect(body).to include('action' => 'refresh', 'hash' => nil, 'path' => nil)
+      job = JSON.parse(File.read(Dir.glob(File.join(dir, '*.json')).first))
+      expect(job).to include('action' => 'refresh')
+      expect(job).not_to include('hash', 'path')
+    end
+  end
+
   it 'accepts a library path only where the action allows it, and only inside the library' do
     with_tmpdir do |dir|
       env_root = '/Users/theater/Media'

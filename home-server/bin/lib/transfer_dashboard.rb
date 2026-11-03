@@ -215,12 +215,14 @@ module TransferDashboard
     end
 
     # Dashboard-triggered jobs (promotions), newest first, as plain hashes:
-    # the job's status.json plus its id and the tail of its log.
+    # the job's status.json plus its id and the tail of its log. A refresh
+    # job shows only when it fails.
     def jobs_from(queue)
-      queue.jobs(limit: JOBS_LIMIT).map do |job|
+      jobs = queue.jobs(limit: JOBS_LIMIT).map do |job|
         status = job.status || { 'state' => 'queued' }
         status.merge('id' => job.id, 'request' => job.request, 'log' => job.log_tail)
       end
+      jobs.reject { |j| j['request']['action'] == 'refresh' && j['state'] != 'failed' }
     rescue StandardError
       []
     end
@@ -550,7 +552,7 @@ module TransferDashboard
       <body>
       <main>
         <h1>Transfers</h1>
-        <p class="sub">Generated <%= h(@report.generated_at.strftime('%a %b %e, %H:%M')) %> · <b>Transfers</b> · <a href="media/">Media</a></p>
+        <p class="sub">Generated <%= h(@report.generated_at.strftime('%a %b %e, %H:%M')) %> · <b>Transfers</b> · <a href="media/">Media</a> · <span class="actions"><button type="button" class="queue" data-action="refresh">Refresh</button><span class="note"></span></span></p>
 
         <%- week = @report.counts(WEEK); unhandled = @report.unhandled -%>
         <section class="tiles" aria-label="Last 7 days">
@@ -713,14 +715,15 @@ module TransferDashboard
         navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
       });
 
-      // Promote and Re-run finish buttons queue a job for transfers-worker.rb
+      // Promote, Re-run finish and Refresh buttons queue a job for transfers-worker.rb
       // through the CGI at /transfers/api (see README-transfers.md, "Promoting
       // to the NAS"). The worker runs asynchronously and regenerates this page
       // when it is done.
       document.addEventListener('click', function (event) {
         var button = event.target.closest ? event.target.closest('button.queue') : null;
         if (!button) { return; }
-        if (!window.confirm(button.getAttribute('data-confirm'))) { return; }
+        var question = button.getAttribute('data-confirm');
+        if (question && !window.confirm(question)) { return; }
         var note = button.parentNode.querySelector('.note');
         button.disabled = true;
         note.className = 'note';
@@ -743,7 +746,9 @@ module TransferDashboard
           button.disabled = false;
         };
         xhr.onerror = function () { note.className = 'note error'; note.textContent = 'Could not reach ' + api; button.disabled = false; };
-        xhr.send(JSON.stringify({ action: button.getAttribute('data-action'), hash: button.getAttribute('data-hash') }));
+        var body = { action: button.getAttribute('data-action') };
+        if (button.hasAttribute('data-hash')) { body.hash = button.getAttribute('data-hash'); }
+        xhr.send(JSON.stringify(body));
       });
       </script>
       </body>

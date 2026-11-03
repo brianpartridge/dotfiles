@@ -17,6 +17,7 @@
 #   {"action":"remove_torrent","hash":"<40 hex>","keep_library":true}
 #   {"action":"unlink_library","hash":"<40 hex>"}  or  {"action":"unlink_library","path":"..."}
 #   {"action":"rerun_finish","hash":"<40 hex>"}
+#   {"action":"refresh"}
 
 require 'json'
 
@@ -24,7 +25,7 @@ QUEUE = ENV['TRANSFERS_QUEUE'] || '/Users/theater/logs/transfers-queue'
 MEDIA_ROOT = ENV['MEDIA_ROOT'] || '/Users/theater/Media'
 # action => which of hash / path it accepts
 ACTIONS = { 'promote' => %w[hash path], 'remove_torrent' => %w[hash], 'unlink_library' => %w[hash path],
-            'rerun_finish' => %w[hash] }.freeze
+            'rerun_finish' => %w[hash], 'refresh' => [] }.freeze
 
 def respond(status, body)
   print "Status: #{status}\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n\r\n"
@@ -47,7 +48,9 @@ action = request['action'].to_s
 respond('400 Bad Request', 'error' => "action must be one of #{ACTIONS.keys.join(', ')}") unless ACTIONS.key?(action)
 
 job = { 'action' => action, 'requested_at' => Time.now.strftime('%Y-%m-%dT%H:%M:%S%z'), 'via' => 'dashboard', 'from' => ENV['REMOTE_ADDR'] }
-if request.key?('path') && ACTIONS[action].include?('path')
+if ACTIONS[action].empty?
+  # The action has no subject, for example refresh.
+elsif request.key?('path') && ACTIONS[action].include?('path')
   path = request['path'].to_s
   # Only files inside the local library, by a plain absolute path.
   unless path.start_with?("#{MEDIA_ROOT}/") && !path.include?('/../') && !path.include?("\0")

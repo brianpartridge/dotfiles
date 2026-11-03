@@ -232,6 +232,24 @@ describe TransferDashboard do
       end
     end
 
+    it 'shows a Refresh button, and lists a refresh job only when it failed' do
+      with_tmpdir do |dir|
+        out = File.join(dir, 'index.html')
+        refresh = lambda do |id, state|
+          instance_double(JobQueue::Job, id: id, request: { 'action' => 'refresh' }, log_tail: '',
+                                         status: { 'state' => state, 'action' => 'refresh', 'subject' => '', 'message' => "#{state} refresh" })
+        end
+        jobs = [refresh.call('20260925-120200-refresh-', 'running'), refresh.call('20260925-120100-refresh-', 'done'),
+                refresh.call('20260925-120000-refresh-', 'failed')]
+        r = build(records: [], queue: instance_double(JobQueue, jobs: jobs))
+        expect(r.jobs.map { |j| j['id'] }).to eq(['20260925-120000-refresh-'])
+        TransferDashboard.generate(report: r, output: out, quiet: true)
+        html = File.read(out, encoding: 'UTF-8')
+        expect(html).to include('<button type="button" class="queue" data-action="refresh">Refresh</button>', 'failed refresh')
+        expect(html).not_to include('running refresh', 'done refresh')
+      end
+    end
+
     it 'shows no jobs section when the queue has never been used' do
       with_tmpdir do |dir|
         out = File.join(dir, 'index.html')
