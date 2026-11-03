@@ -20,7 +20,7 @@ about it, and how to see what happened to recent transfers.
 | `lib/media_config.rb` | Where everything lives: library, Dropbox media folders, the NAS, the job queue. |
 | `lib/promoter.rb`, `lib/job_queue.rb`, `lib/transfers_worker.rb`, `transfers-worker.rb` | Promoting items to the NAS, triggered from the dashboard and run in the background (see below). |
 | `../web/cgi/transfers-api.rb` | The dashboard's one write endpoint, run by Apache: it only drops a request file into the queue. |
-| `../../home-server/Library/LaunchAgents/*.plist` | Regenerate the dashboard every 30 minutes; run the worker whenever the queue is non-empty. |
+| `../../home-server/Library/LaunchAgents/*.plist` | Regenerate the dashboard every 5 minutes; run the worker whenever the queue is non-empty. |
 
 ## One-time setup
 
@@ -201,7 +201,7 @@ a broken link, a file Transmission expects that is not on disk.
 Filters: search, state, kind, on the NAS or not, age (under 30 days; over
 30, 100, 180 days or a year, counted from when the torrent finished), and
 sort order, remembered per browser. "Over 100 days" plus "Seeding, in
-library" is the list of things that have seeded long enough. The page regenerates with the transfers dashboard (every 30
+library" is the list of things that have seeded long enough. The page regenerates with the transfers dashboard (every 5
 minutes and after every job); `media-dashboard.rb` regenerates it alone,
 `--text` prints it, `--json` dumps what the page is built from
 (`media.json` next to the page).
@@ -288,6 +288,14 @@ non-empty. The worker moves each request into its own folder under
 `~/logs/transfers-jobs/<time>-promote-<name>/` (`request.json`, `status.json`,
 `log.txt`), does the work, appends a record, notifies, and regenerates the
 dashboard. Old job folders can be deleted at any time.
+
+## Refreshing the dashboard
+
+The page regenerates every 5 minutes, after every job and after every
+download. To regenerate it now, click **Refresh** next to "Generated" at the
+top. It queues a `refresh` job, and the page reloads a few seconds later. A
+refresh job appears under **Jobs** only when it fails. From a terminal, run
+`launchctl kickstart gui/$(id -u)/com.brianpartridge.transfers-dashboard`.
 
 ## Re-running the done-script
 

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'fileutils'
 require 'logger'
 require 'open3'
 require 'rbconfig'
@@ -16,7 +17,7 @@ require_relative 'transmission_rpc'
 # the transfer log so the dashboard and the web UI show the new state, the
 # job's own status and log files, a notification, and a dashboard refresh.
 class TransfersWorker
-  ACTIONS = %w[promote remove_torrent unlink_library rerun_finish].freeze
+  ACTIONS = %w[promote remove_torrent unlink_library rerun_finish refresh].freeze
   FINISH_SCRIPT = File.expand_path('../torrent-finished.rb', __dir__)
 
   # torrent-finished.rb failed and already recorded and announced that, so
@@ -89,12 +90,12 @@ class TransfersWorker
       e.backtrace.first(8).each { |line| job.log "  #{line}" }
       @log.error "#{job.id}: #{e.class}: #{e.message}"
       unless e.is_a?(FinishScriptFailed)
-        record_failure(action, request, e, job)
+        record_failure(action, request, e, job) unless action == 'refresh'
         @notify.call("#{subject}\n#{e.class}: #{e.message}", title: "#{action.capitalize} failed", priority: :high,
                                                                   url: TransferDashboard.url, url_title: 'Open the dashboard')
       end
     end
-    refresh_dashboard(job)
+    refresh_dashboard(job) unless action == 'refresh'
   end
 
   # Finds the transfer record for a hash (newest first), or nil.
@@ -109,6 +110,18 @@ class TransfersWorker
   end
 
   private
+
+  # Rebuild both pages now, for the dashboard's Refresh button. Earlier
+  # refresh jobs that worked are removed, so they do not fill the Jobs list.
+  def do_refresh(job, _request)
+    Dir.glob(File.join(@queue.jobs_dir, '*-refresh-*')).each do |dir|
+      next if dir == job.dir || JobQueue::Job.new(dir).status&.fetch('state', nil) != 'done'
+
+      FileUtils.rm_rf(dir)
+    end
+    @regenerate.call
+    'Rebuilt the dashboard'
+  end
 
   def do_promote(job, request)
     keep_link = request['keep_link'] == true

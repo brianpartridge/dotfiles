@@ -52,6 +52,32 @@ describe TransfersWorker do
     end
   end
 
+  it 'refreshes the dashboard once, and keeps only failed refresh jobs' do
+    with_tmpdir do |dir|
+      w = setup(dir)
+      @queue.enqueue('refresh')
+      first = w.process!.first
+      expect(first.status).to include('state' => 'done', 'message' => 'Rebuilt the dashboard')
+      expect(@refreshes).to eq(1)
+
+      failing = TransfersWorker.new(queue: @queue, promoter: nil, transfer_log: @log, logger: null_logger,
+                                    regenerate: -> { raise 'disk full' }, notify: ->(message, **opts) { @pushes << [message, opts] })
+      @queue.enqueue('refresh')
+      failed = failing.process!.first
+      expect(failed.status).to include('state' => 'failed', 'message' => 'RuntimeError: disk full')
+      expect(@pushes.last.last).to include(title: 'Refresh failed')
+      expect(@log.records).to be_empty
+
+      @queue.enqueue('refresh')
+      last = w.process!.first
+      expect(@refreshes).to eq(2)
+      # The first job's folder is gone. In the same second, the last job can
+      # take its name again.
+      expect(Dir.glob(File.join(@queue.jobs_dir, '*')).sort).to eq([last.dir, failed.dir].sort)
+      expect(first.dir == last.dir || !Dir.exist?(first.dir)).to be true
+    end
+  end
+
   it 'promotes a path directly and says when the download copy is kept' do
     with_tmpdir do |dir|
       w = setup(dir)
