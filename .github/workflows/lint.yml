@@ -15,10 +15,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run shellcheck on each shell script
         run: |
-          # Find scripts by their shebang, so new scripts are checked too.
+          # Find scripts by their shebang or .sh name, so new scripts are checked too.
           scripts=()
           while IFS= read -r f; do
-            if head -n 1 "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
+            if [[ "$f" == *.sh ]] || head -n 1 "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
               scripts+=("$f")
             fi
           done < <(git ls-files)
