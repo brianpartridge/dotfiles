@@ -26,6 +26,17 @@ Unless directed to otherwise, only create draft PRs. I'll promote them when I th
 
 Prefer `rg` over `grep` whenever it is available, because it is so much faster.
 
+# Model Selection
+
+- Use a Fable agent for planning and analysis.
+- Use a Fable agent for code that has difficult design decisions.
+- Use an Opus agent for other code and for test failures that need a diagnosis.
+- Use a Sonnet agent for data gathering that needs a summary or a comparison.
+- Use a Sonnet agent for test runs that need only a report.
+- Use a Haiku agent for searches and simple data extraction.
+- If you are not sure, use the larger model.
+- Do small tasks in the current session. Do not delegate them.
+
 # Performance and Reliability
 
 Maintain ~/Development/papercuts.md, a global log shared by all my AI sessions of anything that slowed down development. When you lose time to one mid-session, append date · symptom · fix · project. Check this file first when tooling fails mysteriously.
