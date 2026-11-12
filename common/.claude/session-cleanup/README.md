@@ -22,7 +22,11 @@ The app's own worktrees are not in the ledger. The daily job handles them.
 
 - No flags: dry run. Prints the actions and the git and PR state. It changes nothing.
 - `--apply`: removes shut-down ledger simulators and clean, pushed ledger worktrees.
-- `--apply --final`: the session ended. Also deletes its ledger DerivedData, DerivedData for its cwd, and its booted simulators.
+- `--apply --final`: the session ended. Also deletes its ledger DerivedData and its booted simulators.
+  A recorded DerivedData path is kept when it is home, the cwd, a repo, an ancestor of these, or holds a project.
+  The cwd's default DerivedData is not deleted, because another session can share the cwd. The sweep deletes it later.
+- `--apply` holds a per-session lock. If the simulator list fails, the script changes nothing and exits 2.
+- The JSON `pr` is null for no PR, and has `state: UNKNOWN` when the lookup failed. `worktrees` has the git and PR state of each ledger worktree.
 - `--session <id> --cwd <dir>`: act for a different session.
 - `--sweep [--apply]`: machine-wide. Deletes stale worktree DerivedData and old session-named simulators that no ledger owns. Only the daily job uses it.
 

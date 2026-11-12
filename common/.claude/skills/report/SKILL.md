@@ -14,7 +14,9 @@ When a session is archived, a hook removes its simulators, worktrees, and Derive
    ```bash
    python3 -I ~/.claude/session-cleanup/cleanup.py --no-orphans
    ```
-   Read `git`, `pr`, and `ledger_remaining` from the JSON. Ignore `actions`.
+   Read `git` and `pr` for the cwd, and `worktrees` for each ledger worktree. Ignore `actions`.
+   Apply the in-flight rules to the cwd AND to each entry in `worktrees`.
+   A `pr.state` of `UNKNOWN` means the lookup failed. Count it as in-flight, with the reason "PR state unknown".
 2. Collect the status of the work in this session:
    - What did the session do? Use the conversation and the git log of the branch.
    - What work remains? Include failing tests, open review comments, and unanswered questions.
@@ -29,8 +31,8 @@ The session has in-flight work if one or more of these is true:
 - A background task, subagent, or child session still runs.
 - The session waits for an answer from the user.
 - The cwd or a ledger worktree has uncommitted changes.
-- A branch has commits that are not pushed.
-- The branch has an open PR.
+- The cwd or a ledger worktree has commits that are not pushed, or has no upstream and is not merged.
+- The cwd or a ledger worktree has an open PR, or a PR state of `UNKNOWN`.
 
 ## Report format
 

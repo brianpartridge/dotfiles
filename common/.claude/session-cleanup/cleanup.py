@@ -5,18 +5,27 @@ Usage:
   cleanup.py            dry run. Shows what it would remove.
   cleanup.py --apply    removes the items.
   cleanup.py --session <id> --cwd <dir>   act for a different session.
-  cleanup.py --final    the session is about to end. Also delete its DerivedData
-                        and shut down and delete its booted simulators.
+  cleanup.py --final    the session is about to end. Also delete its ledger
+                        DerivedData and shut down and delete its booted simulators.
   cleanup.py --sweep [--apply]   machine-wide sweep for the daily job. See sweep().
 
 Rules:
   - Simulators: delete ledger simulators that are shut down. Delete "unavailable" simulators.
+    If the simulator list fails, stop before any change, so a later run can retry.
   - Worktrees: remove ledger worktrees only if clean, fully pushed or merged, and not the cwd.
-  - DerivedData: delete default DerivedData whose project no longer exists.
-    With --final, also delete ledger DerivedData and DerivedData for the session cwd.
+  - DerivedData: delete default DerivedData whose project no longer exists, or whose
+    project is in a ledger worktree that this run removed. With --final, also delete
+    ledger DerivedData folders that pass is_unsafe_dd(). The session cwd's default
+    DerivedData is never deleted here: another session can share the cwd. The sweep
+    handles it.
   - Never delete branches, sessions, or anything outside these rules.
+  - With --apply, a per-session lock serializes runs for the same session.
+
+Output: "pr" is null when the branch has no PR, and {"state": "UNKNOWN", ...} when
+the PR lookup failed. "worktrees" has the git and PR state of each ledger worktree.
 """
 import argparse
+import fcntl
 import json
 import os
 import plistlib
@@ -103,26 +112,62 @@ def git_status(path):
 
 
 def pr_status(path):
+    """Return the PR, None when the branch has no PR, or an UNKNOWN state when the lookup failed."""
     if not shutil.which("gh"):
+        return {"state": "UNKNOWN", "error": "gh is not installed"}
+    code, out, err = run(["gh", "pr", "view", "--json", "number,url,state,isDraft,title"], cwd=str(path), timeout=30)
+    if code == 0 and out:
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            return {"state": "UNKNOWN", "error": "gh printed invalid JSON"}
+    if "no pull requests found" in err.lower():
         return None
-    code, out, _ = run(["gh", "pr", "view", "--json", "number,url,state,isDraft,title"], cwd=str(path), timeout=30)
-    if code != 0 or not out:
-        return None
-    try:
-        return json.loads(out)
-    except json.JSONDecodeError:
-        return None
+    return {"state": "UNKNOWN", "error": (err or f"gh exit {code}")[:200]}
 
 
 def simulators():
+    """Return the devices by UDID, or None when the list command fails."""
     code, out, _ = run(["xcrun", "simctl", "list", "devices", "-j"])
     if code != 0:
-        return {}
+        return None
+    try:
+        data = json.loads(out).get("devices", {})
+    except (json.JSONDecodeError, AttributeError):
+        return None
     devs = {}
-    for runtime, items in json.loads(out).get("devices", {}).items():
+    for runtime, items in data.items():
         for d in items:
             devs[d["udid"].upper()] = {**d, "runtime": runtime}
     return devs
+
+
+DD_MARKERS = ("Build", "Logs", "Index.noindex", "ModuleCache.noindex", "SourcePackages", "info.plist")
+PROJECT_MARKERS = ("Package.swift", ".git")
+
+
+def is_unsafe_dd(path, protected):
+    """Return a reason when a recorded DerivedData path must not be deleted, else None.
+
+    A -derivedDataPath of "." or ".." records the checkout itself. So reject home,
+    "/", any protected folder (session cwd, recorded command cwd, repo) and its
+    ancestors, any git checkout root, and any folder that holds a project. Also
+    require at least one Xcode build-output marker.
+    """
+    p = path.resolve()
+    if p == HOME or p in HOME.parents:
+        return "home or one of its parents"
+    for q in protected:
+        if p == q or p in q.parents:
+            return f"is or contains {q}"
+    for m in PROJECT_MARKERS:
+        if (p / m).exists():
+            return f"holds {m}"
+    if any(p.glob("*.xcodeproj")) or any(p.glob("*.xcworkspace")):
+        return "holds an Xcode project"
+    if not any((p / m).exists() for m in DD_MARKERS):
+        return "no Xcode build-output marker"
+    return None
 
 
 STOCK_SIM_PREFIXES = ("iPhone", "iPad", "Apple TV", "Apple Watch", "Apple Vision")
@@ -197,6 +242,10 @@ def sweep(apply, stale_days, sim_stale_days):
             actions.append({"kind": "deriveddata", "target": d.name, "action": "delete", "bytes": size, "reason": reason})
 
     sims = simulators()
+    if sims is None:
+        actions.append({"kind": "simulator", "target": "all", "action": "error",
+                        "reason": "simctl list failed, simulators skipped"})
+        sims = {}
     unavailable = [x for x in sims.values() if not x.get("isAvailable", True)]
     if unavailable:
         if apply:
@@ -260,6 +309,11 @@ def main():
 
     cwd = Path(args.cwd).resolve()
     ledger_file = HOME / ".claude" / "session-ledgers" / args.session / "ledger.jsonl"
+    if args.apply:
+        # Two hooks can see the same archive. Hold the lock through load, removal, and save.
+        ledger_file.parent.mkdir(parents=True, exist_ok=True)
+        lock = (ledger_file.parent / ".lock").open("w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
     entries = load_ledger(ledger_file)
     keep = []
     actions = []  # each: {kind, target, action, reason, bytes}
@@ -267,6 +321,13 @@ def main():
 
     # --- Simulators ---------------------------------------------------------
     sims = simulators()
+    if sims is None:
+        if any(e.get("kind") == "simulator" for e in entries):
+            json.dump({"session": args.session, "error": "simctl list failed. Nothing changed. Run again later.",
+                       "ledger_remaining": entries}, sys.stdout, indent=2)
+            print()
+            sys.exit(2)
+        sims = {}
     for e in entries:
         if e.get("kind") != "simulator":
             continue
@@ -346,6 +407,15 @@ def main():
             actions.append({"kind": "deriveddata", "target": str(p), "action": "keep", "reason": "session still active"})
             keep.append(e)
             continue
+        protected = {cwd}
+        for key in ("cwd", "repo"):
+            if e.get(key):
+                protected.add(Path(e[key]).resolve())
+        unsafe = is_unsafe_dd(p, protected)
+        if unsafe:
+            actions.append({"kind": "deriveddata", "target": str(p), "action": "keep", "reason": f"unsafe: {unsafe}"})
+            keep.append(e)
+            continue
         size = du(p)
         if args.apply:
             shutil.rmtree(p, ignore_errors=True)
@@ -364,8 +434,8 @@ def main():
             if not ws:
                 continue
             gone = not Path(ws).exists()
-            ended = removed_worktrees + ([str(cwd)] if args.final else [])
-            in_removed = any(ws.startswith(w.rstrip("/") + "/") for w in ended)
+            # Not the session cwd: another session can share it. The sweep handles it.
+            in_removed = any(ws.startswith(w.rstrip("/") + "/") for w in removed_worktrees)
             if not (gone or in_removed):
                 continue
             # A project on an unmounted volume looks gone. Skip /Volumes paths.
@@ -383,6 +453,13 @@ def main():
 
     # --- Status -------------------------------------------------------------
     status = git_status(cwd)
+    remaining = keep if args.apply else list(entries)
+    worktrees = []
+    for e in remaining:
+        if e.get("kind") != "worktree" or not Path(e["value"]).exists():
+            continue
+        wst = git_status(e["value"])
+        worktrees.append({"path": e["value"], "git": wst, "pr": pr_status(e["value"]) if wst else None})
     report = {
         "session": args.session,
         "cwd": str(cwd),
@@ -390,7 +467,8 @@ def main():
         "mode": ("apply" if args.apply else "dry-run") + (" final" if args.final else ""),
         "git": status,
         "pr": pr_status(cwd) if status else None,
-        "ledger_remaining": keep if args.apply else [e for e in entries],
+        "worktrees": worktrees,
+        "ledger_remaining": remaining,
         "actions": actions,
         "freed_bytes": freed,
         "freed": human(freed),

@@ -13,7 +13,7 @@ import sys
 import time
 from pathlib import Path
 
-UUID_RE = re.compile(r"\b[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\b", re.IGNORECASE)
+UUID_LINE_RE = re.compile(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}", re.IGNORECASE)
 
 
 def session_id(payload):
@@ -67,17 +67,26 @@ def handle_bash(sid, payload):
     resp = payload.get("tool_response") or {}
     stdout = resp.get("stdout", "") if isinstance(resp, dict) else str(resp)
 
-    for seg in split_segments(tokens_of(cmd)):
+    segments = list(split_segments(tokens_of(cmd)))
+    creates = [s for s in segments if "simctl" in s and ("create" in s or "clone" in s)]
+    # simctl create|clone prints the new UDID alone on one line. Other commands in the
+    # same Bash call (for example "simctl list") can print other UDIDs. Record a UDID
+    # only when there is one create or clone and exactly one bare-UDID line.
+    created_udid = None
+    if len(creates) == 1:
+        bare = [ln.strip() for ln in stdout.splitlines() if UUID_LINE_RE.fullmatch(ln.strip())]
+        if len(bare) == 1:
+            created_udid = bare[0].upper()
+
+    for seg in segments:
         # Follow "cd <dir>" so that relative paths resolve correctly.
         if seg and seg[0] in ("cd", "pushd"):
             target = seg[1] if len(seg) > 1 else str(Path.home())
             if not target.startswith("$"):
                 cwd = resolve(target, cwd)
             continue
-        # Simulators: xcrun simctl create|clone prints the new UDID.
-        if "simctl" in seg and ("create" in seg or "clone" in seg):
-            for udid in UUID_RE.findall(stdout):
-                record(sid, "simulator", udid.upper(), cwd)
+        if seg in creates and created_udid:
+            record(sid, "simulator", created_udid, cwd)
 
         # Worktrees: git [-C dir] worktree add [opts] <path> [commit]
         if seg and os.path.basename(seg[0]) == "git" and "worktree" in seg:

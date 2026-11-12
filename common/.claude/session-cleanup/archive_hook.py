@@ -55,13 +55,35 @@ def wait_archived(sid, seconds):
     return rec
 
 
+DEDUP_SECONDS = 600
+
+
 def start_cleanup(sid, cwd):
+    if not cwd:
+        # Never substitute home: a final cleanup then treats everything under it as ended.
+        log(f"{sid} has no worktreePath or cwd in the app record, skip")
+        return
     out = LEDGERS / sid
     out.mkdir(parents=True, exist_ok=True)
+    # Both hooks can see the same archive. Only the first one in DEDUP_SECONDS starts a
+    # worker. cleanup.py also holds a per-session lock while it changes the ledger.
+    marker = out / "archive-cleanup.started"
+    try:
+        if time.time() - marker.stat().st_mtime < DEDUP_SECONDS:
+            log(f"{sid} cleanup already started, skip")
+            return
+        marker.unlink()
+    except FileNotFoundError:
+        pass
+    try:
+        fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        log(f"{sid} cleanup already started, skip")
+        return
+    os.close(fd)
     with (out / "archive-cleanup.json").open("w") as f:
         subprocess.Popen(
-            ["python3", "-I", str(CLEANUP), "--session", sid, "--cwd", cwd or str(HOME),
-             "--apply", "--final"],
+            ["python3", "-I", str(CLEANUP), "--session", sid, "--cwd", cwd, "--apply", "--final"],
             stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             cwd=str(HOME), start_new_session=True,
         )
@@ -79,7 +101,7 @@ def main():
         archived = bool(rec and rec.get("isArchived"))
         log(f"SessionEnd {sid} reason={payload.get('reason')} archived={archived}")
         if archived:
-            start_cleanup(sid, rec.get("worktreePath") or rec.get("cwd") or payload.get("cwd"))
+            start_cleanup(sid, rec.get("worktreePath") or rec.get("cwd"))
     elif event == "PostToolUse":
         sid = (payload.get("tool_input") or {}).get("session_id", "")
         if not sid or sid == "self":

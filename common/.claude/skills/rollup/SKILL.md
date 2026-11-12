@@ -46,7 +46,8 @@ For each child:
   Write your report to ~/.claude/session-ledgers/<your session id>/report.md. Your parent reads it.
   ```
 
-Then end the turn. Say in one line which children you asked. The app continues this session when the children become idle.
+If you sent one or more messages, end the turn. Say in one line which children you asked. The app continues this session when the children become idle.
+If you sent no messages, because each child is remote, do not end the turn. Go to step 5 now.
 
 ### 4. Collect the reports
 
@@ -70,9 +71,11 @@ For each child with a fresh report, check all of these:
   ```bash
   python3 -I ~/.claude/session-cleanup/cleanup.py --session <child id> --cwd "<child cwd>" --no-orphans
   ```
-  The check fails if `git.uncommitted_files` is more than 0.
-  It fails if `git.unpushed_commits` is more than 0, or if there is no upstream and the branch is not merged.
-  It fails if `pr.state` is `OPEN`.
+  Apply these checks to the top-level `git` and `pr`, AND to the `git` and `pr` of each entry in `worktrees`:
+  - The check fails if `git.uncommitted_files` is more than 0.
+  - It fails if `git.unpushed_commits` is more than 0, or if there is no upstream and the branch is not merged.
+  - It fails if `pr.state` is `OPEN` or `UNKNOWN`. `UNKNOWN` means the PR lookup failed, so the state is not verified.
+  - It fails if the JSON has an `error` field.
 
 If all checks pass:
 1. Call `archive_session` for the child. Give a short reason, for example "rollup: no in-flight work".
