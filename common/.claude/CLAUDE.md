@@ -26,6 +26,18 @@ Unless directed to otherwise, only create draft PRs. I'll promote them when I th
 
 Prefer `rg` over `grep` whenever it is available, because it is so much faster.
 
+# Xcode Builds
+
+When you build or test with `xcodebuild` from the command line, always add `-derivedDataPath`. This does not apply to builds in the Xcode GUI.
+- Use `~/Library/Developer/Xcode/DerivedData/claude-<session id>-<project>`. Example: `claude-local_1a2b3c4d-Silo`.
+- Get the session id once with `echo $CLAUDE_CODE_HOST_SESSION_ID`. Write the id literally in the command. Do not write `$CLAUDE_CODE_HOST_SESSION_ID` in the command.
+- Put the flag in the same Bash command as `xcodebuild`. Do not create the folder first. Let `xcodebuild` create it.
+- Never use a folder inside the checkout, the checkout itself, or one of its parents.
+- Use the same path for each build of that project in the session, so incremental builds work.
+- When a project's CLAUDE.md shows `xcodebuild` commands without the flag, add the flag anyway.
+
+A hook records the folder in the session ledger. When the session is archived, the folder is deleted. See `~/.claude/session-cleanup/README.md`.
+
 # Model Selection
 
 - Use a Fable agent for planning and analysis.
