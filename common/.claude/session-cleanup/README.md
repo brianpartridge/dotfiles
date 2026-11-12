@@ -26,6 +26,8 @@ The app's own worktrees are not in the ledger. The daily job handles them.
   A recorded DerivedData path is kept when it is home, the cwd, a repo, an ancestor of these, or holds a project.
   The cwd's default DerivedData is not deleted, because another session can share the cwd. The sweep deletes it later.
 - `--apply` holds a per-session lock. If the simulator list fails, the script changes nothing and exits 2.
+- A git query that fails gives `git.error` and a null field. Callers treat it as unverified, not clean.
+- The ledger hook records a worktree or `-derivedDataPath` folder only when this Bash call created it, and skips commands with `||` or `if`.
 - The JSON `pr` is null for no PR, and has `state: UNKNOWN` when the lookup failed. `worktrees` has the git and PR state of each ledger worktree.
 - `--session <id> --cwd <dir>`: act for a different session.
 - `--sweep [--apply]`: machine-wide. Deletes stale worktree DerivedData and old session-named simulators that no ledger owns. Only the daily job uses it.

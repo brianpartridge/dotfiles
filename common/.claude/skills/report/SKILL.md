@@ -17,6 +17,7 @@ When a session is archived, a hook removes its simulators, worktrees, and Derive
    Read `git` and `pr` for the cwd, and `worktrees` for each ledger worktree. Ignore `actions`.
    Apply the in-flight rules to the cwd AND to each entry in `worktrees`.
    A `pr.state` of `UNKNOWN` means the lookup failed. Count it as in-flight, with the reason "PR state unknown".
+   A non-null `git.error`, or a null `git.uncommitted_files`, means a git query failed. Count it as in-flight, with the reason "git state unknown".
 2. Collect the status of the work in this session:
    - What did the session do? Use the conversation and the git log of the branch.
    - What work remains? Include failing tests, open review comments, and unanswered questions.

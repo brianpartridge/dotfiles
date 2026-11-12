@@ -72,7 +72,8 @@ For each child with a fresh report, check all of these:
   python3 -I ~/.claude/session-cleanup/cleanup.py --session <child id> --cwd "<child cwd>" --no-orphans
   ```
   Apply these checks to the top-level `git` and `pr`, AND to the `git` and `pr` of each entry in `worktrees`:
-  - The check fails if `git.uncommitted_files` is more than 0.
+  - The check fails if `git.error` is not null, or if `git.uncommitted_files` is null. The git state is then not verified.
+  - It fails if `git.uncommitted_files` is more than 0.
   - It fails if `git.unpushed_commits` is more than 0, or if there is no upstream and the branch is not merged.
   - It fails if `pr.state` is `OPEN` or `UNKNOWN`. `UNKNOWN` means the PR lookup failed, so the state is not verified.
   - It fails if the JSON has an `error` field.

@@ -83,19 +83,31 @@ def save_ledger(path, entries):
 
 
 def git_status(path):
-    """Return a dict with the git state of a checkout, or None if it is not a repo."""
+    """Return a dict with the git state of a checkout, or None if it is not a repo.
+
+    When a query fails, its field is None and "error" names the failure. A caller
+    must treat a non-null "error" as unverified state, not as clean.
+    """
     code, top, _ = run(["git", "-C", str(path), "rev-parse", "--show-toplevel"])
     if code != 0:
         return None
+    errors = []
     _, branch, _ = run(["git", "-C", str(path), "rev-parse", "--abbrev-ref", "HEAD"])
-    _, porcelain, _ = run(["git", "-C", str(path), "status", "--porcelain"])
-    dirty = len([l for l in porcelain.splitlines() if l.strip()])
+    code, porcelain, err = run(["git", "-C", str(path), "status", "--porcelain"], timeout=120)
+    if code == 0:
+        dirty = len([l for l in porcelain.splitlines() if l.strip()])
+    else:
+        dirty = None
+        errors.append(f"git status failed: {err[:120]}")
     code, upstream, _ = run(["git", "-C", str(path), "rev-parse", "--abbrev-ref", "@{upstream}"])
     upstream = upstream if code == 0 else None
     ahead = None
     if upstream:
-        _, n, _ = run(["git", "-C", str(path), "rev-list", "--count", "@{upstream}..HEAD"])
-        ahead = int(n) if n.isdigit() else None
+        code, n, err = run(["git", "-C", str(path), "rev-list", "--count", "@{upstream}..HEAD"])
+        if code == 0 and n.isdigit():
+            ahead = int(n)
+        else:
+            errors.append(f"ahead count failed: {err[:120]}")
     merged = False
     code, default, _ = run(["git", "-C", str(path), "symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
     if code == 0 and default:
@@ -108,6 +120,7 @@ def git_status(path):
         "upstream": upstream,
         "unpushed_commits": ahead,
         "merged_into_default": merged,
+        "error": "; ".join(errors) or None,
     }
 
 
@@ -374,6 +387,10 @@ def main():
             continue
         st = git_status(wt) or {}
         reasons = []
+        if not st:
+            reasons.append("not a git checkout")
+        elif st.get("error"):
+            reasons.append(f"git state unverified: {st['error']}")
         if st.get("uncommitted_files"):
             reasons.append(f"{st['uncommitted_files']} uncommitted files")
         pushed = st.get("upstream") and st.get("unpushed_commits") == 0

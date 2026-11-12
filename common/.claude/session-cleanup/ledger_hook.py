@@ -61,11 +61,33 @@ def resolve(path, base):
     return str(p.resolve())
 
 
+# A Bash call runs for 10 minutes at most. A folder that this call created has a
+# birth time inside that window. An older folder belongs to someone else.
+MAX_CALL_SECONDS = 660
+
+
+def created_by_this_call(path):
+    """True if the folder exists and was born during this Bash call."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    born = getattr(st, "st_birthtime", st.st_ctime)
+    return time.time() - born <= MAX_CALL_SECONDS
+
+
+def is_conditional(cmd):
+    """Commands with || or if/then can skip a segment, so execution is not known."""
+    return "||" in cmd or re.search(r"(^|[;&\s])(if|then|else|elif)\s", cmd) is not None
+
+
 def handle_bash(sid, payload):
     cmd = (payload.get("tool_input") or {}).get("command", "")
     cwd = payload.get("cwd") or os.getcwd()
     resp = payload.get("tool_response") or {}
     stdout = resp.get("stdout", "") if isinstance(resp, dict) else str(resp)
+    if is_conditional(cmd) or (isinstance(resp, dict) and resp.get("interrupted")):
+        return
 
     segments = list(split_segments(tokens_of(cmd)))
     creates = [s for s in segments if "simctl" in s and ("create" in s or "clone" in s)]
@@ -109,13 +131,21 @@ def handle_bash(sid, payload):
                         continue
                     pos.append(a)
                 if pos:
-                    record(sid, "worktree", resolve(pos[0], base), cwd, {"repo": base})
+                    wt = resolve(pos[0], base)
+                    # Record only a new worktree: a .git file and a birth time in this call.
+                    if Path(wt, ".git").is_file() and created_by_this_call(wt):
+                        record(sid, "worktree", wt, cwd, {"repo": base})
 
         # DerivedData: xcodebuild -derivedDataPath <dir>
         if seg and os.path.basename(seg[0]) == "xcodebuild" and "-derivedDataPath" in seg:
             j = seg.index("-derivedDataPath")
             if j + 1 < len(seg):
-                record(sid, "deriveddata", resolve(seg[j + 1], cwd), cwd)
+                dd = resolve(seg[j + 1], cwd)
+                # A folder that existed before this call belongs to someone else.
+                # Never claim the cwd, its parents, or a checkout ("." or "..").
+                is_checkout = dd == cwd or cwd.startswith(dd.rstrip("/") + "/") or Path(dd, ".git").exists()
+                if created_by_this_call(dd) and not is_checkout:
+                    record(sid, "deriveddata", dd, cwd)
 
 
 def handle_enter_worktree(sid, payload):
