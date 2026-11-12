@@ -5,6 +5,7 @@ The ledger lets cleanup.py remove only items that this session owns.
 Ledger: ~/.claude/session-ledgers/<session-id>/ledger.jsonl
 This hook never blocks a tool call. It exits 0 on every error.
 """
+import fcntl
 import json
 import os
 import re
@@ -14,6 +15,7 @@ import time
 from pathlib import Path
 
 UUID_LINE_RE = re.compile(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}", re.IGNORECASE)
+SEPARATORS = {"&&", "||", ";", ";;", "|", "&", "(", ")", "\n"}
 
 
 def session_id(payload):
@@ -30,13 +32,40 @@ def record(sid, kind, value, cwd, extra=None):
     entry = {"kind": kind, "value": value, "cwd": cwd, "ts": int(time.time())}
     if extra:
         entry.update(extra)
-    with ledger_path(sid).open("a") as f:
-        f.write(json.dumps(entry) + "\n")
+    path = ledger_path(sid)
+    # cleanup.py rewrites the ledger under the same short lock, so no append is lost.
+    with (path.parent / "ledger.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with path.open("a") as f:
+            f.write(json.dumps(entry) + "\n")
+
+
+def mark_newlines(command):
+    """Replace each unquoted newline with a " \\n " token, so it splits segments like ";"."""
+    out, quote, esc = [], None, False
+    for ch in command:
+        if esc:
+            esc = False
+        elif ch == "\\" and quote != "'":
+            esc = True
+        elif quote:
+            if ch == quote:
+                quote = None
+        elif ch in ("'", '"'):
+            quote = ch
+        elif ch == "\n":
+            out.append(" ; ")
+            continue
+        out.append(ch)
+    return "".join(out)
 
 
 def tokens_of(command):
+    """Split a command into words. Unquoted ; & | ( ) and newlines become their own tokens."""
     try:
-        return shlex.split(command, posix=True)
+        lex = shlex.shlex(mark_newlines(command), posix=True, punctuation_chars=";&|()")
+        lex.whitespace_split = True
+        return list(lex)
     except ValueError:
         return command.split()
 
@@ -44,7 +73,7 @@ def tokens_of(command):
 def split_segments(tokens):
     seg = []
     for t in tokens:
-        if t in ("&&", "||", ";", "|"):
+        if t in SEPARATORS:
             if seg:
                 yield seg
             seg = []

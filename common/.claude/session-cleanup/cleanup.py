@@ -75,11 +75,30 @@ def load_ledger(path):
     return entries
 
 
-def save_ledger(path, entries):
+def save_ledger(path, entries, loaded):
+    """Write entries, plus any records that ledger_hook appended after the load.
+
+    ledger_hook appends under the same short "ledger.lock", so no append is lost.
+    The lock is held only for the read and the write, not during deletions.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text("".join(json.dumps(e) + "\n" for e in entries))
-    tmp.replace(path)
+    with (path.parent / "ledger.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current = load_ledger(path)
+        appended = [e for e in current if e not in loaded]
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text("".join(json.dumps(e) + "\n" for e in entries + appended))
+        tmp.replace(path)
+
+
+def remove_tree(path):
+    """Delete a folder. Return None on success, or an error message when it still exists."""
+    errors = []
+    # onerror, not onexc: the system python3 is 3.9.
+    shutil.rmtree(path, onerror=lambda _f, p, ei: errors.append(f"{p}: {ei[1]}"))
+    if Path(path).exists():
+        return (errors[0] if errors else "folder still exists")[:200]
+    return None
 
 
 def git_status(path):
@@ -250,7 +269,10 @@ def sweep(apply, stale_days, sim_stale_days):
                 continue
             size = du(d)
             if apply:
-                shutil.rmtree(d, ignore_errors=True)
+                err = remove_tree(d)
+                if err:
+                    actions.append({"kind": "deriveddata", "target": d.name, "action": "error", "reason": err})
+                    continue
             freed += size
             actions.append({"kind": "deriveddata", "target": d.name, "action": "delete", "bytes": size, "reason": reason})
 
@@ -435,7 +457,12 @@ def main():
             continue
         size = du(p)
         if args.apply:
-            shutil.rmtree(p, ignore_errors=True)
+            err = remove_tree(p)
+            if err:
+                # Keep the entry so a later cleanup can retry.
+                actions.append({"kind": "deriveddata", "target": str(p), "action": "error", "reason": err})
+                keep.append(e)
+                continue
         freed += size
         actions.append({"kind": "deriveddata", "target": str(p), "action": "delete", "bytes": size})
 
@@ -460,13 +487,16 @@ def main():
                 continue
             size = du(d)
             if args.apply:
-                shutil.rmtree(d, ignore_errors=True)
+                err = remove_tree(d)
+                if err:
+                    actions.append({"kind": "deriveddata", "target": d.name, "action": "error", "reason": err})
+                    continue
             freed += size
             actions.append({"kind": "deriveddata", "target": d.name, "action": "delete", "bytes": size,
                             "reason": f"project gone: {ws}" if gone else f"worktree ended: {ws}"})
 
     if args.apply:
-        save_ledger(ledger_file, keep)
+        save_ledger(ledger_file, keep, entries)
 
     # --- Status -------------------------------------------------------------
     status = git_status(cwd)
