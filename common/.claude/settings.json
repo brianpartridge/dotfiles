@@ -1,6 +1,39 @@
 {
   "model": "fable[1m]",
   "hooks": {
+  	"PostToolUse": [
+	  {
+		"matcher": "Bash|EnterWorktree",
+		"hooks": [
+		  {
+			"type": "command",
+			"command": "python3 -I ~/.claude/session-cleanup/ledger_hook.py",
+			"timeout": 10
+		  }
+		]
+	  },
+	  {
+		"matcher": "mcp__ccd_session_mgmt__archive_session",
+		"hooks": [
+		  {
+			"type": "command",
+			"command": "python3 -I ~/.claude/session-cleanup/archive_hook.py",
+			"timeout": 10
+		  }
+		]
+	  }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I ~/.claude/session-cleanup/archive_hook.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
