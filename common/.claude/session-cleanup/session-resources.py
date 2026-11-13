@@ -176,6 +176,20 @@ def simulators():
     return devs
 
 
+def delete_unavailable(sims, apply):
+    """Delete "unavailable" simulators. Return the action, an error action, or None."""
+    unavailable = [d for d in sims.values() if not d.get("isAvailable", True)]
+    if not unavailable:
+        return None
+    target = f"{len(unavailable)} unavailable"
+    if apply:
+        code, _, err = run(["xcrun", "simctl", "delete", "unavailable"])
+        if code != 0:
+            return {"kind": "simulator", "target": target, "action": "error",
+                    "reason": (err or f"simctl exit {code}")[:200]}
+    return {"kind": "simulator", "target": target, "action": "delete"}
+
+
 DD_MARKERS = ("Build", "Logs", "Index.noindex", "ModuleCache.noindex", "SourcePackages", "info.plist")
 PROJECT_MARKERS = ("Package.swift", ".git")
 
@@ -283,11 +297,9 @@ def sweep(apply, stale_days, sim_stale_days):
         actions.append({"kind": "simulator", "target": "all", "action": "error",
                         "reason": "simctl list failed, simulators skipped"})
         sims = {}
-    unavailable = [x for x in sims.values() if not x.get("isAvailable", True)]
-    if unavailable:
-        if apply:
-            run(["xcrun", "simctl", "delete", "unavailable"])
-        actions.append({"kind": "simulator", "target": f"{len(unavailable)} unavailable", "action": "delete"})
+    action = delete_unavailable(sims, apply)
+    if action:
+        actions.append(action)
 
     owned = all_ledger_udids()
     live = live_worktree_names()
@@ -405,11 +417,9 @@ def main():
         freed += size
         actions.append({"kind": "simulator", "target": f"{dev['name']} {udid}", "action": "delete", "bytes": size})
 
-    unavailable = [d for d in sims.values() if not d.get("isAvailable", True)]
-    if unavailable:
-        if args.apply:
-            run(["xcrun", "simctl", "delete", "unavailable"])
-        actions.append({"kind": "simulator", "target": f"{len(unavailable)} unavailable", "action": "delete"})
+    action = delete_unavailable(sims, args.apply)
+    if action:
+        actions.append(action)
 
     # --- Worktrees ----------------------------------------------------------
     removed_worktrees = []
