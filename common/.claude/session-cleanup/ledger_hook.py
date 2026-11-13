@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PostToolUse hook. Records resources that a session creates.
 
-The ledger lets cleanup.py remove only items that this session owns.
+The ledger lets session-resources.py remove only items that this session owns.
 Ledger: ~/.claude/session-ledgers/<session-id>/ledger.jsonl
 This hook never blocks a tool call. It exits 0 on every error.
 """
@@ -33,7 +33,7 @@ def record(sid, kind, value, cwd, extra=None):
     if extra:
         entry.update(extra)
     path = ledger_path(sid)
-    # cleanup.py rewrites the ledger under the same short lock, so no append is lost.
+    # session-resources.py rewrites the ledger under the same short lock, so no append is lost.
     with (path.parent / "ledger.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         with path.open("a") as f:

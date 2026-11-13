@@ -12,9 +12,9 @@ When a session is archived, a hook removes its simulators, worktrees, and Derive
 
 1. Get the git and PR state. This is a dry run. It changes nothing.
    ```bash
-   python3 -I ~/.claude/session-cleanup/cleanup.py --no-orphans
+   python3 -I ~/.claude/session-cleanup/session-resources.py report
    ```
-   Read `git` and `pr` for the cwd, and `worktrees` for each ledger worktree. Ignore `actions`.
+   Read `git` and `pr` for the cwd, and `worktrees` for each ledger worktree. Ignore `actions`. They are what a cleanup would do.
    Apply the in-flight rules to the cwd AND to each entry in `worktrees`.
    A `pr.state` of `UNKNOWN` means the lookup failed. Count it as in-flight, with the reason "PR state unknown".
    A non-null `git.error`, or a null `git.uncommitted_files`, means a git query failed. Count it as in-flight, with the reason "git state unknown".

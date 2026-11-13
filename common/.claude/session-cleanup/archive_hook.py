@@ -9,7 +9,7 @@ Two hook events call this script:
   PostToolUse archive_session        another session archived a session. The
                                      script cleans up the target session.
 
-The cleanup is `cleanup.py --session <id> --cwd <dir> --apply --final`.
+The cleanup is `session-resources.py cleanup --session <id> --cwd <dir> --final`.
 It runs detached, so the hook returns at once. Output goes to
 ~/.claude/session-ledgers/<id>/archive-cleanup.json.
 Each call adds one line to ~/.claude/session-ledgers/archive-hook.log.
@@ -27,7 +27,7 @@ from pathlib import Path
 HOME = Path.home()
 RECORDS = HOME / "Library/Application Support/Claude/claude-code-sessions"
 LEDGERS = HOME / ".claude" / "session-ledgers"
-CLEANUP = HOME / ".claude/session-cleanup/cleanup.py"
+CLEANUP = HOME / ".claude/session-cleanup/session-resources.py"
 
 
 def log(msg):
@@ -66,7 +66,7 @@ def start_cleanup(sid, cwd):
     out = LEDGERS / sid
     out.mkdir(parents=True, exist_ok=True)
     # Both hooks can see the same archive. Only the first one in DEDUP_SECONDS starts a
-    # worker. cleanup.py also holds a per-session lock while it changes the ledger.
+    # worker. session-resources.py also holds a per-session lock while it changes the ledger.
     marker = out / "archive-cleanup.started"
     try:
         if time.time() - marker.stat().st_mtime < DEDUP_SECONDS:
@@ -83,7 +83,7 @@ def start_cleanup(sid, cwd):
     os.close(fd)
     with (out / "archive-cleanup.json").open("w") as f:
         subprocess.Popen(
-            ["python3", "-I", str(CLEANUP), "--session", sid, "--cwd", cwd, "--apply", "--final"],
+            ["python3", "-I", str(CLEANUP), "cleanup", "--session", sid, "--cwd", cwd, "--final"],
             stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             cwd=str(HOME), start_new_session=True,
         )

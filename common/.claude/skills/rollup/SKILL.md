@@ -69,7 +69,7 @@ For each child with a fresh report, check all of these:
 - `list_sessions` shows no session below the child that is not archived.
 - The independent git check shows no in-flight work. Run it with the child's `cwd`. It is a dry run and changes nothing:
   ```bash
-  python3 -I ~/.claude/session-cleanup/cleanup.py --session <child id> --cwd "<child cwd>" --no-orphans
+  python3 -I ~/.claude/session-cleanup/session-resources.py report --session <child id> --cwd "<child cwd>"
   ```
   Apply these checks to the top-level `git` and `pr`, AND to the `git` and `pr` of each entry in `worktrees`:
   - The check fails if `git.error` is not null, or if `git.uncommitted_files` is null. The git state is then not verified.

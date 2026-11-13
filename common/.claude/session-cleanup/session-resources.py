@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Clean up resources that one Claude session owns, then print a JSON status.
+"""Report on or clean up the resources that one Claude session owns.
 
 Usage:
-  cleanup.py            dry run. Shows what it would remove.
-  cleanup.py --apply    removes the items.
-  cleanup.py --session <id> --cwd <dir>   act for a different session.
-  cleanup.py --final    the session is about to end. Also delete its ledger
-                        DerivedData and shut down and delete its booted simulators.
-  cleanup.py --sweep [--apply]   machine-wide sweep for the daily job. See sweep().
+  session-resources.py report                 read-only. Prints the git and PR state, the
+                                              ledger, and the actions a cleanup would take.
+  session-resources.py report --final         the same, for a session that is about to end.
+  session-resources.py cleanup                removes the items. Add --dry-run to change nothing.
+  session-resources.py cleanup --final        the session is about to end. Also delete its ledger
+                                              DerivedData and shut down and delete its booted simulators.
+  session-resources.py cleanup --sweep        machine-wide sweep for the daily job. See sweep().
+  --session <id> --cwd <dir>                  act for a different session. report and cleanup only.
 
 Rules:
   - Simulators: delete ledger simulators that are shut down. Delete "unavailable" simulators.
@@ -17,9 +19,9 @@ Rules:
     project is in a ledger worktree that this run removed. With --final, also delete
     ledger DerivedData folders that pass is_unsafe_dd(). The session cwd's default
     DerivedData is never deleted here: another session can share the cwd. The sweep
-    handles it.
+    handles it. report does not look for orphan DerivedData.
   - Never delete branches, sessions, or anything outside these rules.
-  - With --apply, a per-session lock serializes runs for the same session.
+  - cleanup holds a per-session lock, so runs for the same session do not overlap.
 
 Output: "pr" is null when the branch has no PR, and {"state": "UNKNOWN", ...} when
 the PR lookup failed. "worktrees" has the git and PR state of each ledger worktree.
@@ -325,20 +327,36 @@ def sweep(apply, stale_days, sim_stale_days):
     print()
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--sweep", action="store_true",
-                    help="machine-wide sweep of stale DerivedData and session simulators; ignores the ledger")
-    ap.add_argument("--stale-days", type=int, default=14, help="--sweep: worktree DerivedData age limit")
-    ap.add_argument("--sim-stale-days", type=int, default=7, help="--sweep: session simulator age limit")
-    ap.add_argument("--apply", action="store_true")
-    ap.add_argument("--session", default=os.environ.get("CLAUDE_CODE_HOST_SESSION_ID") or "unknown")
-    ap.add_argument("--cwd", default=os.getcwd())
-    ap.add_argument("--final", action="store_true")
-    ap.add_argument("--no-orphans", action="store_true", help="skip orphaned DerivedData sweep")
-    args = ap.parse_args()
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description="Report on or clean up the resources of a Claude session.")
+    sub = ap.add_subparsers(dest="action", required=True)
 
-    if args.sweep:
+    def session_args(p):
+        p.add_argument("--session", default=os.environ.get("CLAUDE_CODE_HOST_SESSION_ID") or "unknown")
+        p.add_argument("--cwd", default=os.getcwd())
+        p.add_argument("--final", action="store_true", help="the session is about to end")
+
+    rp = sub.add_parser("report", help="read-only status: git, PR, ledger, and planned actions")
+    session_args(rp)
+
+    cp = sub.add_parser("cleanup", help="remove the resources that the session or the machine no longer needs")
+    session_args(cp)
+    cp.add_argument("--dry-run", action="store_true", help="show the actions, change nothing")
+    cp.add_argument("--no-orphans", action="store_true", help="skip orphaned DerivedData")
+    cp.add_argument("--sweep", action="store_true",
+                    help="machine-wide sweep of stale DerivedData and session simulators; ignores the ledger")
+    cp.add_argument("--stale-days", type=int, default=14, help="--sweep: worktree DerivedData age limit")
+    cp.add_argument("--sim-stale-days", type=int, default=7, help="--sweep: session simulator age limit")
+    args = ap.parse_args(argv)
+    args.apply = args.action == "cleanup" and not args.dry_run
+    args.orphans = args.action == "cleanup" and not args.no_orphans
+    return args
+
+
+def main():
+    args = parse_args()
+
+    if args.action == "cleanup" and args.sweep:
         sweep(args.apply, args.stale_days, args.sim_stale_days)
         return
 
@@ -466,7 +484,7 @@ def main():
         freed += size
         actions.append({"kind": "deriveddata", "target": str(p), "action": "delete", "bytes": size})
 
-    if not args.no_orphans and DD_ROOT.exists():
+    if args.orphans and DD_ROOT.exists():
         for d in sorted(DD_ROOT.iterdir()):
             info = d / "info.plist"
             if not info.exists():
@@ -511,7 +529,7 @@ def main():
         "session": args.session,
         "cwd": str(cwd),
         "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "mode": ("apply" if args.apply else "dry-run") + (" final" if args.final else ""),
+        "mode": args.action + ("" if args.apply or args.action == "report" else " dry-run") + (" final" if args.final else ""),
         "git": status,
         "pr": pr_status(cwd) if status else None,
         "worktrees": worktrees,
