@@ -90,6 +90,37 @@ def resolve(path, base):
     return str(p.resolve())
 
 
+SP_ROOT = Path.home() / "Library" / "Developer" / "Xcode" / "SourcePackages"
+COPY_COMMANDS = ("cp", "ditto", "rsync")
+
+
+def package_clone(token, cwd):
+    """Return the direct child of SP_ROOT that holds the path, or None."""
+    home = str(Path.home())
+    token = token.replace("${HOME}", home).replace("$HOME", home)
+    if "$" in token:
+        return None
+    p = Path(resolve(token, cwd))
+    root = SP_ROOT.resolve()
+    if root not in p.parents:
+        return None
+    return str(root / p.relative_to(root).parts[0])
+
+
+def package_clone_targets(seg):
+    """Return the arguments of a segment that can name a new package clone folder."""
+    name = os.path.basename(seg[0]) if seg else ""
+    positional = [a for a in seg[1:] if not a.startswith("-")]
+    if name == "xcodebuild" and "-clonedSourcePackagesDirPath" in seg:
+        j = seg.index("-clonedSourcePackagesDirPath")
+        return seg[j + 1:j + 2]
+    if name in COPY_COMMANDS and len(positional) >= 2:
+        return positional[-1:]
+    if name == "mkdir":
+        return positional
+    return []
+
+
 # A Bash call runs for 10 minutes at most. A folder that this call created has a
 # birth time inside that window. An older folder belongs to someone else.
 MAX_CALL_SECONDS = 660
@@ -164,6 +195,14 @@ def handle_bash(sid, payload):
                     # Record only a new worktree: a .git file and a birth time in this call.
                     if Path(wt, ".git").is_file() and created_by_this_call(wt):
                         record(sid, "worktree", wt, cwd, {"repo": base})
+
+        # Package clones: a new folder in ~/Library/Developer/Xcode/SourcePackages, made by
+        # cp, ditto, rsync, mkdir, or xcodebuild -clonedSourcePackagesDirPath <dir>.
+        # A folder that existed before this call belongs to someone else.
+        for target in package_clone_targets(seg):
+            clone = package_clone(target, cwd)
+            if clone and created_by_this_call(clone):
+                record(sid, "sourcepackages", clone, cwd)
 
         # DerivedData: xcodebuild -derivedDataPath <dir>
         if seg and os.path.basename(seg[0]) == "xcodebuild" and "-derivedDataPath" in seg:
