@@ -244,11 +244,36 @@ def is_unsafe_sp(path):
 
 
 def xcodebuild_uses(path):
-    """True when a running xcodebuild names the folder in its arguments."""
-    code, out, _ = run(["pgrep", "-fl", "xcodebuild"])
+    """True when a running xcodebuild uses the folder, or when that is not known.
+
+    Match the folder in the process arguments. Also resolve the value of
+    -clonedSourcePackagesDirPath, because a build can give a relative path or a
+    path with "/./". A relative value resolves against the process cwd.
+    """
+    code, out, _ = run(["ps", "-axo", "pid=,command="])
     if code != 0:
-        return False
-    return any(re.search(re.escape(str(path)) + r"(/|\s|$)", line) for line in out.splitlines())
+        return True
+    target = os.path.realpath(path)
+    for line in out.splitlines():
+        if "xcodebuild" not in line:
+            continue
+        pid, _, cmd = line.strip().partition(" ")
+        if re.search(re.escape(str(path)) + r"(/|\s|$)", cmd):
+            return True
+        m = re.search(r"-clonedSourcePackagesDirPath\s+(\S+)", cmd)
+        if not m:
+            continue
+        arg = os.path.expanduser(m.group(1))
+        if not os.path.isabs(arg):
+            code, lsof, _ = run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"])
+            cwds = [ln[1:] for ln in lsof.splitlines() if ln.startswith("n")]
+            if code != 0 or not cwds:
+                return True
+            arg = os.path.join(cwds[0], arg)
+        real = os.path.realpath(arg)
+        if real == target or real.startswith(target + "/"):
+            return True
+    return False
 
 
 STOCK_SIM_PREFIXES = ("iPhone", "iPad", "Apple TV", "Apple Watch", "Apple Vision")
@@ -280,13 +305,18 @@ def checkout_names():
 
 
 def last_used(clone):
-    """Latest change time of a package clone. SwiftPM writes workspace-state.json on each resolve."""
+    """Latest time that a package clone was made or changed.
+
+    SwiftPM writes workspace-state.json on each resolve. A copy that keeps the
+    modification times (rsync -a) still has a new birth time and change time.
+    """
     times = []
     for p in (clone, clone / "workspace-state.json", clone / "checkouts", clone / "repositories"):
         try:
-            times.append(p.stat().st_mtime)
+            st = p.stat()
         except OSError:
-            pass
+            continue
+        times += [st.st_mtime, st.st_ctime, getattr(st, "st_birthtime", 0)]
     return max(times) if times else 0
 
 

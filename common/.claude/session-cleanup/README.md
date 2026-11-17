@@ -39,6 +39,7 @@ The app's own worktrees are not in the ledger. The daily job handles them.
 - The JSON `pr` is null for no PR, and has `state: UNKNOWN` when the lookup failed. `worktrees` has the git and PR state of each ledger worktree.
 - The ledger hook records a worktree, a `-derivedDataPath` folder, or a package clone only when this Bash call created it, and skips commands with `||` or `if`.
 - The ledger hook finds a package clone in `cp`, `ditto`, `rsync`, `mkdir`, and `xcodebuild -clonedSourcePackagesDirPath` commands.
+  A clone that a ledger already holds keeps its first owner.
   The path must be literal, or start with `~` or `$HOME`. A path in a different shell variable is not recorded.
 
 ## Logs

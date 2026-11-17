@@ -40,6 +40,24 @@ def record(sid, kind, value, cwd, extra=None):
             f.write(json.dumps(entry) + "\n")
 
 
+def already_recorded(kind, value):
+    """True when a session ledger, this one or a different one, holds the item."""
+    root = Path.home() / ".claude" / "session-ledgers"
+    for f in root.glob("*/ledger.jsonl"):
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if e.get("kind") == kind and e.get("value") == value:
+                return True
+    return False
+
+
 def mark_newlines(command):
     """Replace each unquoted newline with a " \\n " token, so it splits segments like ";"."""
     out, quote, esc = [], None, False
@@ -198,10 +216,12 @@ def handle_bash(sid, payload):
 
         # Package clones: a new folder in ~/Library/Developer/Xcode/SourcePackages, made by
         # cp, ditto, rsync, mkdir, or xcodebuild -clonedSourcePackagesDirPath <dir>.
-        # A folder that existed before this call belongs to someone else.
+        # A folder that existed before this call belongs to someone else. The birth-time
+        # test cannot see a no-op on a folder that a different session made minutes ago,
+        # so a clone that a ledger already holds keeps its first owner.
         for target in package_clone_targets(seg):
             clone = package_clone(target, cwd)
-            if clone and created_by_this_call(clone):
+            if clone and created_by_this_call(clone) and not already_recorded("sourcepackages", clone):
                 record(sid, "sourcepackages", clone, cwd)
 
         # DerivedData: xcodebuild -derivedDataPath <dir>
