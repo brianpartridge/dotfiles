@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# Install Homebrew and the tools in each Brewfile, then link the common
-# package and one config package into $HOME.
+# Install Homebrew and the tools in each Brewfile, link the common package
+# and one config package into $HOME, then apply the macOS settings.
 #
-# Usage: ./install.sh [--no-brew] <config>
+# Usage: ./install.sh [--no-brew] [--no-defaults] <config>
 #
 # With no config, the script shows the configs and how to install one.
-# --no-brew skips the Brewfiles and only links the dotfiles.
+# --no-brew skips the Brewfiles.
+# --no-defaults skips the macos-defaults.sh files.
 
 set -euo pipefail
 
@@ -14,7 +15,7 @@ DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 HOMEBREW_VERSION="7.0.10"
 HOMEBREW_PKG_SHA256="ae13b8b0ac910730d3e982a9e7518288d17fd0ad272e42f412027e8ab4555575"
 HOMEBREW_TEAM_ID="927JGANW46"
-STOW_OPTS=(--dir "$DOTFILES" --target "$HOME" --ignore '\.DS_Store' --ignore 'Brewfile')
+STOW_OPTS=(--dir "$DOTFILES" --target "$HOME" --ignore '\.DS_Store' --ignore 'Brewfile' --ignore 'macos-defaults\.sh')
 
 die() {
   echo "error: $*" >&2
@@ -32,10 +33,13 @@ configs() {
 
 usage() {
   local config
-  echo "Usage: $0 [--no-brew] <config>"
+  echo "Usage: $0 [--no-brew] [--no-defaults] <config>"
   echo
-  echo "Installs the tools in each Brewfile and links common and the config you give."
-  echo "--no-brew skips the Brewfiles. Configs:"
+  echo "Installs the tools in each Brewfile, links common and the config you give,"
+  echo "and applies the macOS settings in each macos-defaults.sh file."
+  echo "--no-brew skips the Brewfiles. --no-defaults skips the macOS settings."
+  echo
+  echo "Configs:"
   while IFS= read -r config; do echo "  $config"; done < <(configs)
   echo "  none  (link only common)"
   echo
@@ -145,12 +149,58 @@ remove_duplicates() {
   done
 }
 
-main() {
-  local brew=1 packages=(common)
-  if [[ "${1:-}" == "--no-brew" ]]; then
-    brew=0
-    shift
+# Write one macOS setting, but only when its value is different.
+# Usage: set_default <domain> <key> <-bool|-int|-float|-string> <value>
+# The macos-defaults.sh files call this function.
+set_default() {
+  local domain="$1" key="$2" type="$3" value="$4" want current
+  want="$value"
+  if [[ "$type" == "-bool" ]]; then
+    case "$value" in
+      true | yes | 1) want=1 ;;
+      *) want=0 ;;
+    esac
   fi
+  current="$(defaults read "$domain" "$key" 2>/dev/null || true)"
+  [[ "$current" == "$want" ]] && return
+  echo "Setting $domain $key to $value."
+  defaults write "$domain" "$key" "$type" "$value"
+  case "$domain" in
+    com.apple.dock) RESTART_APPS+=(Dock) ;;
+    com.apple.finder) RESTART_APPS+=(Finder) ;;
+    com.apple.screencapture) RESTART_APPS+=(SystemUIServer) ;;
+  esac
+}
+
+# Apply the macos-defaults.sh file of each package that has one. Then
+# restart the apps whose settings changed, so the new values take effect.
+apply_defaults() {
+  local pkg app
+  RESTART_APPS=()
+  for pkg in "$@"; do
+    [[ -f "$DOTFILES/$pkg/macos-defaults.sh" ]] || continue
+    echo "Applying macOS settings from $pkg/macos-defaults.sh."
+    # shellcheck source=/dev/null
+    source "$DOTFILES/$pkg/macos-defaults.sh"
+  done
+  [[ ${#RESTART_APPS[@]} -gt 0 ]] || return 0
+  for app in $(printf '%s\n' "${RESTART_APPS[@]}" | sort -u); do
+    echo "Restarting $app."
+    killall "$app" 2>/dev/null || true
+  done
+  echo "Some settings take effect only after you log out and log in again."
+}
+
+main() {
+  local brew=1 defaults=1 packages=(common)
+  while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+      --no-brew) brew=0 ;;
+      --no-defaults) defaults=0 ;;
+      *) die "unknown option '$1'" ;;
+    esac
+    shift
+  done
   local config="${1:-}"
 
   if [[ -z "$config" ]]; then
@@ -178,6 +228,10 @@ main() {
     echo "Linking: $pkg"
     stow --restow --verbose "${STOW_OPTS[@]}" "$pkg"
   done
+
+  if [[ $defaults -eq 1 && "$(uname)" == "Darwin" ]]; then
+    apply_defaults "${packages[@]}"
+  fi
   echo "Done."
 }
 

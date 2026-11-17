@@ -1,3 +1,4 @@
 --target=~
 --ignore=\.DS_Store
 --ignore=Brewfile
+--ignore=macos-defaults\.sh

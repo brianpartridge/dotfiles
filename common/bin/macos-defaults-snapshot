@@ -1,0 +1,102 @@
+#!/bin/bash
+#
+# Read a fixed list of macOS settings and write them to a file on the
+# Desktop, one line per setting: domain, key, type, value.
+# The script only reads settings. It changes nothing.
+# "unset" means the Mac uses the macOS default for that setting.
+
+out="${OUT:-$HOME/Desktop/macos-defaults-$(hostname -s).tsv}"
+
+settings="
+NSGlobalDomain AppleInterfaceStyle
+NSGlobalDomain AppleInterfaceStyleSwitchesAutomatically
+NSGlobalDomain AppleAccentColor
+NSGlobalDomain AppleHighlightColor
+NSGlobalDomain AppleShowAllExtensions
+NSGlobalDomain AppleShowScrollBars
+NSGlobalDomain AppleKeyboardUIMode
+NSGlobalDomain KeyRepeat
+NSGlobalDomain InitialKeyRepeat
+NSGlobalDomain ApplePressAndHoldEnabled
+NSGlobalDomain com.apple.swipescrolldirection
+NSGlobalDomain com.apple.keyboard.fnState
+NSGlobalDomain com.apple.mouse.tapBehavior
+NSGlobalDomain com.apple.trackpad.scaling
+NSGlobalDomain NSAutomaticCapitalizationEnabled
+NSGlobalDomain NSAutomaticDashSubstitutionEnabled
+NSGlobalDomain NSAutomaticPeriodSubstitutionEnabled
+NSGlobalDomain NSAutomaticQuoteSubstitutionEnabled
+NSGlobalDomain NSAutomaticSpellingCorrectionEnabled
+NSGlobalDomain NSDocumentSaveNewDocumentsToCloud
+NSGlobalDomain NSNavPanelExpandedStateForSaveMode
+NSGlobalDomain PMPrintingExpandedStateForPrint
+NSGlobalDomain NSTableViewDefaultSizeMode
+com.apple.dock autohide
+com.apple.dock autohide-delay
+com.apple.dock autohide-time-modifier
+com.apple.dock tilesize
+com.apple.dock magnification
+com.apple.dock largesize
+com.apple.dock orientation
+com.apple.dock minimize-to-application
+com.apple.dock mineffect
+com.apple.dock show-recents
+com.apple.dock show-process-indicators
+com.apple.dock mru-spaces
+com.apple.dock expose-group-apps
+com.apple.dock wvous-tl-corner
+com.apple.dock wvous-tr-corner
+com.apple.dock wvous-bl-corner
+com.apple.dock wvous-br-corner
+com.apple.finder AppleShowAllFiles
+com.apple.finder ShowPathbar
+com.apple.finder ShowStatusBar
+com.apple.finder FXPreferredViewStyle
+com.apple.finder FXDefaultSearchScope
+com.apple.finder FXEnableExtensionChangeWarning
+com.apple.finder _FXSortFoldersFirst
+com.apple.finder _FXShowPosixPathInTitle
+com.apple.finder NewWindowTarget
+com.apple.finder ShowHardDrivesOnDesktop
+com.apple.finder ShowExternalHardDrivesOnDesktop
+com.apple.finder ShowRemovableMediaOnDesktop
+com.apple.finder ShowMountedServersOnDesktop
+com.apple.desktopservices DSDontWriteNetworkStores
+com.apple.desktopservices DSDontWriteUSBStores
+com.apple.screencapture location
+com.apple.screencapture type
+com.apple.screencapture disable-shadow
+com.apple.screencapture show-thumbnail
+com.apple.AppleMultitouchTrackpad Clicking
+com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag
+com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking
+com.apple.driver.AppleBluetoothMultitouch.trackpad TrackpadThreeFingerDrag
+com.apple.menuextra.clock ShowSeconds
+com.apple.menuextra.clock ShowDate
+com.apple.menuextra.clock Show24Hour
+com.apple.screensaver askForPassword
+com.apple.screensaver askForPasswordDelay
+com.apple.TextEdit RichText
+com.apple.Terminal Default Window Settings
+com.apple.ActivityMonitor ShowCategory
+com.apple.ActivityMonitor IconType
+"
+
+{
+  printf '# %s %s %s\n' "$(hostname -s)" "$(sw_vers -productVersion)" "$(sysctl -n hw.model)"
+  printf 'domain\tkey\ttype\tvalue\n'
+  echo "$settings" | while read -r domain key; do
+    [ -n "$domain" ] || continue
+    if value="$(defaults read "$domain" "$key" 2>/dev/null)"; then
+      type="$(defaults read-type "$domain" "$key" 2>/dev/null | sed 's/^Type is //')"
+      # Keep each value on one line.
+      value="$(printf '%s' "$value" | tr '\n' ' ' | tr -s ' ')"
+    else
+      type="-"
+      value="unset"
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$domain" "$key" "$type" "$value"
+  done
+} > "$out"
+
+echo "Wrote $out"
