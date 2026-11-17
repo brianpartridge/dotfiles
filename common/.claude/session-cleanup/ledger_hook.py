@@ -40,6 +40,24 @@ def record(sid, kind, value, cwd, extra=None):
             f.write(json.dumps(entry) + "\n")
 
 
+def already_recorded(kind, value):
+    """True when a session ledger, this one or a different one, holds the item."""
+    root = Path.home() / ".claude" / "session-ledgers"
+    for f in root.glob("*/ledger.jsonl"):
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if e.get("kind") == kind and e.get("value") == value:
+                return True
+    return False
+
+
 def mark_newlines(command):
     """Replace each unquoted newline with a " \\n " token, so it splits segments like ";"."""
     out, quote, esc = [], None, False
@@ -88,6 +106,37 @@ def resolve(path, base):
     if not p.is_absolute():
         p = Path(base) / p
     return str(p.resolve())
+
+
+SP_ROOT = Path.home() / "Library" / "Developer" / "Xcode" / "SourcePackages"
+COPY_COMMANDS = ("cp", "ditto", "rsync")
+
+
+def package_clone(token, cwd):
+    """Return the direct child of SP_ROOT that holds the path, or None."""
+    home = str(Path.home())
+    token = token.replace("${HOME}", home).replace("$HOME", home)
+    if "$" in token:
+        return None
+    p = Path(resolve(token, cwd))
+    root = SP_ROOT.resolve()
+    if root not in p.parents:
+        return None
+    return str(root / p.relative_to(root).parts[0])
+
+
+def package_clone_targets(seg):
+    """Return the arguments of a segment that can name a new package clone folder."""
+    name = os.path.basename(seg[0]) if seg else ""
+    positional = [a for a in seg[1:] if not a.startswith("-")]
+    if name == "xcodebuild" and "-clonedSourcePackagesDirPath" in seg:
+        j = seg.index("-clonedSourcePackagesDirPath")
+        return seg[j + 1:j + 2]
+    if name in COPY_COMMANDS and len(positional) >= 2:
+        return positional[-1:]
+    if name == "mkdir":
+        return positional
+    return []
 
 
 # A Bash call runs for 10 minutes at most. A folder that this call created has a
@@ -164,6 +213,16 @@ def handle_bash(sid, payload):
                     # Record only a new worktree: a .git file and a birth time in this call.
                     if Path(wt, ".git").is_file() and created_by_this_call(wt):
                         record(sid, "worktree", wt, cwd, {"repo": base})
+
+        # Package clones: a new folder in ~/Library/Developer/Xcode/SourcePackages, made by
+        # cp, ditto, rsync, mkdir, or xcodebuild -clonedSourcePackagesDirPath <dir>.
+        # A folder that existed before this call belongs to someone else. The birth-time
+        # test cannot see a no-op on a folder that a different session made minutes ago,
+        # so a clone that a ledger already holds keeps its first owner.
+        for target in package_clone_targets(seg):
+            clone = package_clone(target, cwd)
+            if clone and created_by_this_call(clone) and not already_recorded("sourcepackages", clone):
+                record(sid, "sourcepackages", clone, cwd)
 
         # DerivedData: xcodebuild -derivedDataPath <dir>
         if seg and os.path.basename(seg[0]) == "xcodebuild" and "-derivedDataPath" in seg:

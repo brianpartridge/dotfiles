@@ -6,7 +6,7 @@ description: Write a status report of this session's work, with its in-flight st
 # Report
 
 Write a status report of the work in this session. Do not clean up anything.
-When a session is archived, a hook removes its simulators, worktrees, and DerivedData. See `~/.claude/session-cleanup/README.md`.
+When a session is archived, a hook removes its simulators, worktrees, DerivedData, and package clones. See `~/.claude/session-cleanup/README.md`.
 
 ## Procedure
 
@@ -48,7 +48,7 @@ in_flight_reasons: <comma list, or none>
 
 - Session: <local_ session id>
 - Branch: <branch or none> · PR: <url and state, or none>
-- Resources: <count of ledger simulators, worktrees, and DerivedData folders. The archive hook removes them.>
+- Resources: <count of ledger simulators, worktrees, DerivedData folders, and package clones. The archive hook removes them.>
 
 ## Done
 - ...

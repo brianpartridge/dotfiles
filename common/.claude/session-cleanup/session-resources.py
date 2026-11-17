@@ -7,7 +7,8 @@ Usage:
   session-resources.py report --final         the same, for a session that is about to end.
   session-resources.py cleanup                removes the items. Add --dry-run to change nothing.
   session-resources.py cleanup --final        the session is about to end. Also delete its ledger
-                                              DerivedData and shut down and delete its booted simulators.
+                                              DerivedData and package clones, and shut down and delete
+                                              its booted simulators.
   session-resources.py cleanup --sweep        machine-wide sweep for the daily job. See sweep().
   --session <id> --cwd <dir>                  act for a different session. report and cleanup only.
 
@@ -20,6 +21,9 @@ Rules:
     ledger DerivedData folders that pass is_unsafe_dd(). The session cwd's default
     DerivedData is never deleted here: another session can share the cwd. The sweep
     handles it. report does not look for orphan DerivedData.
+  - Package clones: with --final, delete ledger folders in
+    ~/Library/Developer/Xcode/SourcePackages that pass is_unsafe_sp() and that no
+    running xcodebuild uses. A clone that the ledger does not hold is never deleted.
   - Never delete branches, sessions, or anything outside these rules.
   - cleanup holds a per-session lock, so runs for the same session do not overlap.
 
@@ -40,6 +44,7 @@ from pathlib import Path
 
 HOME = Path.home()
 DD_ROOT = HOME / "Library" / "Developer" / "Xcode" / "DerivedData"
+SP_ROOT = HOME / "Library" / "Developer" / "Xcode" / "SourcePackages"
 
 
 def run(cmd, cwd=None, timeout=60):
@@ -218,6 +223,59 @@ def is_unsafe_dd(path, protected):
     return None
 
 
+SP_MARKERS = ("checkouts", "repositories", "artifacts", "prebuilts", "workspace-state.json")
+
+
+def is_unsafe_sp(path):
+    """Return a reason when a recorded package clone must not be deleted, else None.
+
+    The folder must be a real direct child of SP_ROOT. It must be empty or hold
+    at least one SwiftPM checkout marker.
+    """
+    if path.is_symlink():
+        return "is a symlink"
+    if path.resolve().parent != SP_ROOT.resolve():
+        return f"not a direct child of {SP_ROOT}"
+    if not path.is_dir():
+        return "not a folder"
+    if any(path.iterdir()) and not any((path / m).exists() for m in SP_MARKERS):
+        return "no SwiftPM checkout marker"
+    return None
+
+
+def xcodebuild_uses(path):
+    """True when a running xcodebuild uses the folder, or when that is not known.
+
+    Match the folder in the process arguments. Also resolve the value of
+    -clonedSourcePackagesDirPath, because a build can give a relative path or a
+    path with "/./". A relative value resolves against the process cwd.
+    """
+    code, out, _ = run(["ps", "-axo", "pid=,command="])
+    if code != 0:
+        return True
+    target = os.path.realpath(path)
+    for line in out.splitlines():
+        if "xcodebuild" not in line:
+            continue
+        pid, _, cmd = line.strip().partition(" ")
+        if re.search(re.escape(str(path)) + r"(/|\s|$)", cmd):
+            return True
+        m = re.search(r"-clonedSourcePackagesDirPath\s+(\S+)", cmd)
+        if not m:
+            continue
+        arg = os.path.expanduser(m.group(1))
+        if not os.path.isabs(arg):
+            code, lsof, _ = run(["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"])
+            cwds = [ln[1:] for ln in lsof.splitlines() if ln.startswith("n")]
+            if code != 0 or not cwds:
+                return True
+            arg = os.path.join(cwds[0], arg)
+        real = os.path.realpath(arg)
+        if real == target or real.startswith(target + "/"):
+            return True
+    return False
+
+
 STOCK_SIM_PREFIXES = ("iPhone", "iPad", "Apple TV", "Apple Watch", "Apple Vision")
 SIM_SUFFIX_RE = re.compile(r"-(\d+-\d+-)?(iPhone|iPad|Apple).*$")
 
@@ -241,13 +299,39 @@ def live_worktree_names():
     return names
 
 
-def sweep(apply, stale_days, sim_stale_days):
+def checkout_names():
+    """Names of the checkout folders. A package folder with such a name is a shared base."""
+    return {p.name for base in (HOME / "Development", HOME) if base.is_dir() for p in base.iterdir() if p.is_dir()}
+
+
+def last_used(clone):
+    """Latest time that a package clone was made or changed.
+
+    SwiftPM writes workspace-state.json on each resolve. A copy that keeps the
+    modification times (rsync -a) still has a new birth time and change time.
+    """
+    times = []
+    for p in (clone, clone / "workspace-state.json", clone / "checkouts", clone / "repositories"):
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        times += [st.st_mtime, st.st_ctime, getattr(st, "st_birthtime", 0)]
+    return max(times) if times else 0
+
+
+def sweep(apply, stale_days, sim_stale_days, sp_stale_days):
     """Machine-wide sweep of items that no live session can still need.
 
     - DerivedData whose project is gone, or whose project is in a
       */.claude/worktrees/* folder that Xcode has not used for stale_days.
       Folders used in the last day, shared caches, and folders without
       info.plist are kept. /Volumes projects that look gone are kept.
+    - Package clones in SP_ROOT that nothing has used for sp_stale_days. A
+      folder with the name of a checkout in ~/Development or ~ is a shared
+      base and is kept. So is a folder that fails is_unsafe_sp(), and one
+      that a running xcodebuild uses. The ledgers are not read: a session
+      that still needs a deleted clone makes a new one in seconds.
     - "unavailable" simulators.
     - Shut-down simulators with a session-style name (not a stock Apple
       device name) when no live worktree name starts with the name prefix,
@@ -291,6 +375,24 @@ def sweep(apply, stale_days, sim_stale_days):
                     continue
             freed += size
             actions.append({"kind": "deriveddata", "target": d.name, "action": "delete", "bytes": size, "reason": reason})
+
+    if SP_ROOT.exists():
+        bases = checkout_names()
+        for d in sorted(SP_ROOT.iterdir()):
+            if d.name in bases or is_unsafe_sp(d):
+                continue
+            age = (now - last_used(d)) / 86400
+            if age < sp_stale_days or xcodebuild_uses(d):
+                continue
+            size = du(d)
+            if apply:
+                err = remove_tree(d)
+                if err:
+                    actions.append({"kind": "sourcepackages", "target": d.name, "action": "error", "reason": err})
+                    continue
+            freed += size
+            actions.append({"kind": "sourcepackages", "target": d.name, "action": "delete", "bytes": size,
+                            "reason": f"unused {age:.0f}d"})
 
     sims = simulators()
     if sims is None:
@@ -356,9 +458,10 @@ def parse_args(argv=None):
     cp.add_argument("--dry-run", action="store_true", help="show the actions, change nothing")
     cp.add_argument("--no-orphans", action="store_true", help="skip orphaned DerivedData")
     cp.add_argument("--sweep", action="store_true",
-                    help="machine-wide sweep of stale DerivedData and session simulators; ignores the ledger")
+                    help="machine-wide sweep of stale DerivedData, package clones and session simulators")
     cp.add_argument("--stale-days", type=int, default=14, help="--sweep: worktree DerivedData age limit")
     cp.add_argument("--sim-stale-days", type=int, default=7, help="--sweep: session simulator age limit")
+    cp.add_argument("--sp-stale-days", type=int, default=7, help="--sweep: package clone age limit")
     args = ap.parse_args(argv)
     args.apply = args.action == "cleanup" and not args.dry_run
     args.orphans = args.action == "cleanup" and not args.no_orphans
@@ -369,7 +472,7 @@ def main():
     args = parse_args()
 
     if args.action == "cleanup" and args.sweep:
-        sweep(args.apply, args.stale_days, args.sim_stale_days)
+        sweep(args.apply, args.stale_days, args.sim_stale_days, args.sp_stale_days)
         return
 
     cwd = Path(args.cwd).resolve()
@@ -493,6 +596,40 @@ def main():
                 continue
         freed += size
         actions.append({"kind": "deriveddata", "target": str(p), "action": "delete", "bytes": size})
+
+    # --- Package clones -----------------------------------------------------
+    seen_clones = set()
+    for e in entries:
+        if e.get("kind") != "sourcepackages":
+            continue
+        p = Path(e["value"])
+        if str(p) in seen_clones:
+            continue
+        seen_clones.add(str(p))
+        if not p.exists():
+            actions.append({"kind": "sourcepackages", "target": str(p), "action": "forget", "reason": "already gone"})
+            continue
+        if not args.final:
+            actions.append({"kind": "sourcepackages", "target": str(p), "action": "keep", "reason": "session still active"})
+            keep.append(e)
+            continue
+        unsafe = is_unsafe_sp(p)
+        if not unsafe and xcodebuild_uses(p):
+            unsafe = "a running xcodebuild uses it"
+        if unsafe:
+            actions.append({"kind": "sourcepackages", "target": str(p), "action": "keep", "reason": f"unsafe: {unsafe}"})
+            keep.append(e)
+            continue
+        size = du(p)
+        if args.apply:
+            err = remove_tree(p)
+            if err:
+                # Keep the entry so a later cleanup can retry.
+                actions.append({"kind": "sourcepackages", "target": str(p), "action": "error", "reason": err})
+                keep.append(e)
+                continue
+        freed += size
+        actions.append({"kind": "sourcepackages", "target": str(p), "action": "delete", "bytes": size})
 
     if args.orphans and DD_ROOT.exists():
         for d in sorted(DD_ROOT.iterdir()):
