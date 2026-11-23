@@ -495,6 +495,8 @@ def parse_args(argv=None):
         p.add_argument("--session", default=os.environ.get("CLAUDE_CODE_HOST_SESSION_ID") or "unknown")
         p.add_argument("--cwd", default=os.getcwd())
         p.add_argument("--final", action="store_true", help="the session is about to end")
+        p.add_argument("--worktree-stale-days", type=int, default=7,
+                       help="keep a ledger worktree that was used within this many days")
 
     rp = sub.add_parser("report", help="read-only status: git, PR, ledger, and planned actions")
     session_args(rp)
@@ -503,8 +505,6 @@ def parse_args(argv=None):
     session_args(cp)
     cp.add_argument("--dry-run", action="store_true", help="show the actions, change nothing")
     cp.add_argument("--no-orphans", action="store_true", help="skip orphaned DerivedData")
-    cp.add_argument("--worktree-stale-days", type=int, default=7,
-                    help="keep a ledger worktree that was used within this many days")
     cp.add_argument("--sweep", action="store_true",
                     help="machine-wide sweep of stale DerivedData, package clones and session simulators")
     cp.add_argument("--stale-days", type=int, default=14, help="--sweep: worktree DerivedData age limit")
