@@ -15,7 +15,8 @@ Usage:
 Rules:
   - Simulators: delete ledger simulators that are shut down. Delete "unavailable" simulators.
     If the simulator list fails, stop before any change, so a later run can retry.
-  - Worktrees: remove ledger worktrees only if clean, fully pushed or merged, and not the cwd.
+  - Worktrees: remove ledger worktrees only if clean, fully pushed or merged, not the cwd, and
+    unused for worktree_stale_days (7). See worktree_last_used().
   - DerivedData: delete default DerivedData whose project no longer exists, or whose
     project is in a ledger worktree that this run removed. With --final, also delete
     ledger DerivedData folders that pass is_unsafe_dd(). The session cwd's default
@@ -320,6 +321,51 @@ def last_used(clone):
     return max(times) if times else 0
 
 
+RECORDS = HOME / "Library" / "Application Support" / "Claude" / "claude-code-sessions"
+ACTIVITY_KEYS = ("lastActivityAt", "lastFocusedAt", "lastTurnEdgeAt", "latestUserFrameAt")
+
+
+def session_activity(path):
+    """Latest app activity (epoch seconds) of any session whose cwd or worktree is path. 0 if none."""
+    root = str(Path(path).resolve())
+    latest = 0
+    for f in RECORDS.glob("*/*/local_*.json") if RECORDS.exists() else []:
+        try:
+            rec = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(rec, dict):
+            continue
+        if not any(str(rec.get(k) or "").rstrip("/") == root for k in ("cwd", "worktreePath")):
+            continue
+        for k in ACTIVITY_KEYS:
+            v = rec.get(k)
+            if isinstance(v, (int, float)):
+                latest = max(latest, v / 1000)
+    return latest
+
+
+def worktree_last_used(path):
+    """Latest time (epoch seconds) that a worktree was used, or None when it cannot be told.
+
+    Signals: the app's session activity for this folder, and the modification times of the
+    worktree's git HEAD, index and HEAD reflog (commit, checkout, add, reset) and of the
+    folder itself. Build output and caches are not read: a build can touch them without
+    anyone using the worktree.
+    """
+    code, gitdir, _ = run(["git", "-C", str(path), "rev-parse", "--absolute-git-dir"])
+    if code != 0 or not gitdir:
+        return None
+    times = [session_activity(path)]
+    for p in (Path(path), Path(gitdir) / "HEAD", Path(gitdir) / "index", Path(gitdir) / "logs" / "HEAD"):
+        try:
+            times.append(p.stat().st_mtime)
+        except OSError:
+            continue
+    latest = max(times)
+    return latest or None
+
+
 def sweep(apply, stale_days, sim_stale_days, sp_stale_days):
     """Machine-wide sweep of items that no live session can still need.
 
@@ -457,6 +503,8 @@ def parse_args(argv=None):
     session_args(cp)
     cp.add_argument("--dry-run", action="store_true", help="show the actions, change nothing")
     cp.add_argument("--no-orphans", action="store_true", help="skip orphaned DerivedData")
+    cp.add_argument("--worktree-stale-days", type=int, default=7,
+                    help="keep a ledger worktree that was used within this many days")
     cp.add_argument("--sweep", action="store_true",
                     help="machine-wide sweep of stale DerivedData, package clones and session simulators")
     cp.add_argument("--stale-days", type=int, default=14, help="--sweep: worktree DerivedData age limit")
@@ -536,6 +584,13 @@ def main():
             continue
         if cwd == wt or wt in cwd.parents:
             actions.append({"kind": "worktree", "target": str(wt), "action": "keep", "reason": "session cwd"})
+            keep.append(e)
+            continue
+        last = worktree_last_used(wt)
+        idle_days = (time.time() - last) / 86400 if last else None
+        if idle_days is None or idle_days < args.worktree_stale_days:
+            reason = "last use unknown" if idle_days is None else f"used {idle_days:.1f}d ago, keep until {args.worktree_stale_days}d"
+            actions.append({"kind": "worktree", "target": str(wt), "action": "keep", "reason": reason})
             keep.append(e)
             continue
         st = git_status(wt) or {}
@@ -665,19 +720,23 @@ def main():
 
     # --- Status -------------------------------------------------------------
     status = git_status(cwd)
+    cwd_last = worktree_last_used(cwd) if status else None
     remaining = keep if args.apply else list(entries)
     worktrees = []
     for e in remaining:
         if e.get("kind") != "worktree" or not Path(e["value"]).exists():
             continue
         wst = git_status(e["value"])
-        worktrees.append({"path": e["value"], "git": wst, "pr": pr_status(e["value"]) if wst else None})
+        lu = worktree_last_used(e["value"])
+        worktrees.append({"path": e["value"], "git": wst, "pr": pr_status(e["value"]) if wst else None,
+                          "idle_days": round((time.time() - lu) / 86400, 1) if lu else None})
     report = {
         "session": args.session,
         "cwd": str(cwd),
         "time": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "mode": args.action + ("" if args.apply or args.action == "report" else " dry-run") + (" final" if args.final else ""),
         "git": status,
+        "idle_days": round((time.time() - cwd_last) / 86400, 1) if cwd_last else None,
         "pr": pr_status(cwd) if status else None,
         "worktrees": worktrees,
         "ledger_remaining": remaining,

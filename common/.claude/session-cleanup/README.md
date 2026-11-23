@@ -20,8 +20,11 @@ The app's own worktrees are not in the ledger. The daily job handles them.
 
 ## session-resources.py actions
 
-- `report`: read-only. Prints the git and PR state, the ledger, and the actions that a cleanup would take. It does not look for orphan DerivedData. Add `--final` to see the actions of a final cleanup.
-- `cleanup`: removes shut-down ledger simulators and clean, pushed ledger worktrees. Add `--dry-run` to change nothing.
+- `report`: read-only. Prints the git and PR state, `idle_days`, the ledger, and the actions that a cleanup would take. It does not look for orphan DerivedData. Add `--final` to see the actions of a final cleanup.
+- `cleanup`: removes shut-down ledger simulators and clean, pushed ledger worktrees that nobody used for 7 days. Add `--dry-run` to change nothing.
+  `--worktree-stale-days N` changes the 7 days. Last use is the newest of the app's session activity for the folder and the mtimes of the folder, git `HEAD`, `index` and the `HEAD` reflog.
+  A worktree with an unknown last use is kept. A kept worktree stays in the ledger, so the daily job removes it once it is stale.
+  The one-week limit covers worktrees only. DerivedData, simulators and package clones keep their own schedules.
 - `cleanup --final`: the session ended. Also deletes its ledger DerivedData, its ledger package clones, and its booted simulators.
   A recorded DerivedData path is kept when it is home, the cwd, a repo, an ancestor of these, or holds a project.
   The cwd's default DerivedData is not deleted, because another session can share the cwd. The sweep deletes it later.
