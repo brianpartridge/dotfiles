@@ -22,6 +22,9 @@ Always communicate using ASD-STE100 Simplified Technical English. Apply these ru
 Always lint code before committing.
 Unless directed to otherwise, only create draft PRs. I'll promote them when I think they are ready for wider review.
 
+# Issue Tracking
+Whenever referencing a Linear ticket ID matching SILO-\d+, format it as a Markdown link using https://linear.app/onesilo/issue/<TICKET-ID>.
+
 # Tools
 
 Prefer `rg` over `grep` whenever it is available, because it is so much faster.
